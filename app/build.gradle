@@ -1,13 +1,57 @@
-plugins { id 'com.android.application' }
+plugins {
+    id 'com.android.application'
+}
+
 android {
-    testBuildType 'release'
-    buildFeatures { buildConfig true }
     namespace 'local.tv.launcher'
     compileSdk 35
-    defaultConfig { testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'; applicationId 'local.tv.launcher'; minSdk 31; targetSdk 35; versionCode 2; versionName '2.0' }
-    signingConfigs { local { storeFile file('../launcher-signing.p12'); storePassword 'local-launcher-build'; keyAlias 'launcher'; keyPassword 'local-launcher-build' } }
-    buildTypes { release { minifyEnabled false; signingConfig signingConfigs.local } }
-    sourceSets { main { assets.srcDirs = ['src/main/assets', '../assets'] } }
-    compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
+    buildToolsVersion '35.0.0'
+    testBuildType 'verification'
+
+    defaultConfig {
+        applicationId 'local.tv.launcher'
+        minSdk 31
+        targetSdk 35
+        versionCode 2
+        versionName '2.0'
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+    }
+
+    signingConfigs {
+        local {
+            storeFile file('../launcher-signing.p12')
+            storePassword 'local-launcher-build'
+            keyAlias 'launcher'
+            keyPassword 'local-launcher-build'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.local
+        }
+        verification {
+            initWith release
+            minifyEnabled false
+            shrinkResources false
+            debuggable false
+            matchingFallbacks = ['release']
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
 }
-dependencies { implementation 'androidx.recyclerview:recyclerview:1.4.0'; implementation 'androidx.webkit:webkit:1.12.1'; testImplementation 'junit:junit:4.13.2'; testImplementation 'org.json:json:20240303'; androidTestImplementation 'androidx.test:runner:1.6.2'; androidTestImplementation 'androidx.test.ext:junit:1.2.1' }
+
+dependencies {
+    implementation 'androidx.recyclerview:recyclerview:1.4.0'
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
+    androidTestImplementation 'androidx.test:runner:1.6.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+}

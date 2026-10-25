@@ -1,14 +1,15 @@
 # Third-party notices
 
-AndroidX WebKit 1.12.1, RecyclerView 1.4.0 and AndroidX transitive dependencies are provided by the Android Open Source Project under Apache License 2.0. Sources and individual notices: https://android.googlesource.com/platform/frameworks/support/ . Gradle and Android build tools are build-time components with their own distributions and licenses. JUnit 4.13.2 is a build-time dependency under Eclipse Public License 1.0. Their normal distribution artifacts remain authoritative for included notices.
+AndroidX RecyclerView 1.4.0 and its transitive AndroidX dependencies are provided by the Android Open Source Project under Apache License 2.0. Sources and component notices: https://android.googlesource.com/platform/frameworks/support/ . AndroidX WebKit is not a dependency. Gradle and Android build tools are build-time components with their own distributions and licenses; their distribution artifacts remain authoritative.
 
-Apache License 2.0: https://www.apache.org/licenses/LICENSE-2.0
-JUnit license: https://junit.org/junit4/license.html
+- Apache License 2.0: https://www.apache.org/licenses/LICENSE-2.0
+- JUnit 4.13.2, used for tests: https://junit.org/junit4/license.html
+- Google Java Format 1.24.0, used by `format.sh`: https://github.com/google/google-java-format/blob/v1.24.0/LICENSE
 
-Inter Variable is bundled from the user-supplied Cinema concept. Its SIL Open Font License is included at `app/src/main/assets/ui/assets/Inter-LICENSE.txt`. The supplied concept’s CSS, presentation and artwork are included to implement the user’s requested reference. No additional rights in third-party film artwork are asserted.
+Inter Variable is bundled as the native Android font `app/src/main/res/font/inter.ttf`, obtained from Google Fonts. Its SIL Open Font License is included at `app/src/main/assets/fonts/Inter-LICENSE.txt`. The native interface follows the user-supplied Cinema concept; the old web presentation, WOFF2 font, stock film JPGs, and generated scenic image are removed from the package.
 
-Movie and series metadata is supplied by the official Cinemeta add-on, https://v3-cinemeta.strem.io/manifest.json . Metadata and artwork belong to their respective owners. Stremio is a separate installed application; this launcher only opens its registered title-detail links and provides no streams or playback engine.
+Movie and series metadata is supplied by the official Cinemeta add-on, https://v3-cinemeta.strem.io/manifest.json . Metadata and artwork belong to their respective owners. Stremio is a separate installed application; this launcher opens its registered title-detail links and provides no streams or playback engine.
 
-Weather/geocoding is supplied by Open-Meteo and credited in Settings. See https://open-meteo.com/ . The `org.json:json` dependency is used only by JVM tests (public-domain JSON-java distribution); Android supplies the runtime JSON implementation.
+Runtime app banners and names come from installed applications. Continue Watching/provider artwork comes from records accessible through Android's TV Provider. No additional rights in third-party artwork are asserted.
 
-Runtime app banners and names are read from installed applications. The earlier generated `assets/scenic.jpg` remains as a legacy source asset; the Cinema presentation uses the bundled reference art and live metadata instead.
+The `org.json:json` dependency is used only by JVM tests (the public-domain JSON-java distribution); Android supplies the runtime JSON implementation. Weather/geocoding services are not used.

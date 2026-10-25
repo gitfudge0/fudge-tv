@@ -1,60 +1,62 @@
 # fudge-tv
 
-An Android TV home screen following the supplied Cinema concept: local Inter typography and cinematic layout, real shared Continue Watching, live Cinemeta discovery/search, Open-Meteo weather and remote navigation. Native Java hosts a packaged, restricted WebView. Android 12/API 31 minimum, target/compile API 35; package `local.tv.launcher`, version 2.
+A native Android TV launcher based on the supplied Cinema concept: Inter typography, cinematic featured titles, real Continue Watching, installed apps, and Cinemeta discovery/search. Android Java views and nested RecyclerViews render the interface; no WebView, HTML, CSS, JavaScript, or web runtime is included. Minimum Android 12/API 31, compile/target API 35; application ID `local.tv.launcher`, version 2.
 
-## Build
+## Build and verify
 
-Install Android SDK platform/build-tools 35, Java 21, and Node.js for navigation checks. Android Studio's bundled JDK is used on macOS when available; otherwise set `LAUNCHER_JAVA_HOME`. Set `ANDROID_SDK_ROOT` if needed.
-
-Cinemeta uses the public official add-on at `https://v3-cinemeta.strem.io`; no catalog API key or credential file is required. See [the migration map](docs/cinemeta-migration.md) for provider contracts, identifier preservation, and capability differences.
-
-Run:
+Install Java 21, Python 3, Android SDK platform 35 and build-tools 35.0.0. Set `ANDROID_SDK_ROOT` for a nondefault SDK location and `LAUNCHER_JAVA_HOME` for a specific JDK. Android Studio's bundled JDK is used when present on macOS. Node.js is not required.
 
 ```sh
-./build.sh
-node tests/navigation-test.js
-node tests/search-test.js
-node tests/watch-metadata-test.js
+./verify.sh
 ```
 
-`build.sh` runs release assembly, Java tests and Android lint, verifies the APK signature and prints its SHA-256. It finds cached Gradle 8.7 or downloads and checksum-verifies the official distribution into ignored `.tooling/`; no global Gradle installation is needed. Maven dependencies are resolved from their configured repositories. This bootstrap script is used instead of a checked-in Gradle wrapper binary.
+This checks Java formatting, runs the Python recovery-tool tests and JVM unit tests, assembles an optimized signed release, runs Android lint, verifies the APK signature, and prints its SHA-256. The output is `fudge-launcher.apk`; reports are under `app/build/reports/`. Release builds use R8, resource shrinking, Android's optimized rules, and AndroidX consumer rules. Android instrumentation is separate because it installs an app/test pair.
 
-On the first build, an ignored development `launcher-signing.p12` is generated. Keep that key privately for updates to your installation. A different key cannot update an existing installation in place. The original TV operator must preserve their existing signing certificate; a fresh developer key is for a separate installation. The development signing passwords in the scripts are not account credentials.
+```sh
+./format.sh --write                    # Apply the pinned Java formatter
+./format.sh --check                    # Check without changing sources
+./build.sh                            # Release, JVM tests, lint, APK signature
+./build.sh :app:assembleVerificationAndroidTest
+./verify-android.sh --serial emulator-5560
+```
 
-Generated `BuildConfig.java`, build directories, APKs, signing keys and raw credential files are ignored and must stay outside Git. The local checkout may contain ignored operator state; it is not part of the public project.
+The final command builds and installs a `verification` app/test pair on an explicitly selected local emulator. This uses the production Java and signing configuration with shrinking and minification disabled for fixture testing. Fixture activities live only in the target verification app and are not exported; the test APK has its own normal instrumentation manifest. The normal `release` build keeps its full closed-world optimizations; fixture tests do not substitute for separately launching and inspecting that actual release APK. It leaves default Home and system packages unchanged. It does not target a connected TV. GitHub Actions runs the same device-free verification with Java 21 and SDK 35.
 
-## Install and recover safely
+The scripts use pinned Gradle 8.7 and Google Java Format 1.24.0, downloading and checksum-verifying them into ignored `.tooling/` when needed. Gradle dependencies use explicit versions. Cinemeta is public and needs no API key, credential file, or account.
 
-First inspect and authorize your own ADB connection. The installer requires explicit serial, expected model, API and profile:
+On the first build, an ignored development `launcher-signing.p12` is generated. Preserve an existing installation's private signing key: a different certificate cannot update that installation in place. The public development passwords in the build configuration protect no account credentials. Build products, signing keys, local emulator data, and operator backups remain outside Git.
+
+## Native architecture
+
+`MainActivity` owns lifecycle, asynchronous library/catalog work, permission requests, and validated app launches. `NativeHomeView` owns Home, Search, Settings, and title dialogs. `NativeRowAdapter` and `NativeCardAdapter` use RecyclerView/ListAdapter with stable content identity and asynchronous diffing, recycling horizontal rows/cards rather than rebuilding the entire screen. Inter is an Android font resource, with its license in the packaged assets.
+
+Installed apps and TV Provider records load away from the main thread. Provider changes are debounced and obsolete queries canceled. `LatestRequests` coalesces Home, Search, and Details work independently, cancels superseded requests, and prevents stale lifecycle completions from updating the view. `NativeImages` loads sampled bitmaps into ImageViews using shared, bounded background work, a memory budget, a bounded disk cache, and recycled-target checks.
+
+`CatalogClient` independently fetches four home sources using a bounded source executor. Simultaneous lookups for the same key share one fetch. A cached Home envelope can display before a stale entry refreshes. Complete responses remain fresh for one hour; partial responses never overwrite complete cached results, and provider failure can return explicitly stale data. Catalog HTTPS responses are allowlisted and bounded to 1 MiB per list/5 MiB per detail. The transport checks cancellation, socket timeouts, and a shared elapsed-time budget across the permitted redirect.
+
+## Data and controls
+
+- Home shows featured Cinemeta titles, a separate Continue Watching row, retained streaming apps in recent-use order, accessible provider channels, and separately labeled Cinemeta discovery. D-pad moves among native controls/cards; OK activates the selected action and Back closes a dialog or returns from Search.
+- Continue Watching and provider rows use only records actually visible through Android's TV Provider. Published progress, episode labels, artwork, and descriptions retain their provider identity. Links must resolve to the retained owning app and an exported activity; unsupported links fall back to opening that app. There is no cross-provider metadata enrichment or fabricated playback/progress.
+- Search immediately filters installed launchable TV apps locally. Cinemeta title search is debounced and canceled on edits/close/lifecycle changes. Movie and series title details open exact registered Stremio links with autoplay disabled. Catalog matches do not establish subscription or streaming availability.
+- Settings offers installed apps, refresh, Inputs/Live TV, Wi-Fi/system settings, optional TV listings/usage access, and recommendation visibility/order controls. Provider permissions vary by device; an empty result does not prove unrestricted access.
+
+Weather, geolocation, web presentation, analytics, and playback engines are absent. See [recommendation boundaries](docs/recommendations.md) and [catalog contracts](docs/cinemeta-migration.md).
+
+## Install and recover
+
+The physical-TV installer requires the exact serial, expected model, API, and user profile:
 
 ```sh
 ./build-and-install.sh --serial "$TV_SERIAL" --model "$TV_MODEL" --sdk "$TV_API" --user "$TV_USER"
 ```
 
-It verifies the target, installs only for the selected profile, checks package/version and cleans up its temporary APK. It does not connect ADB, select default Home, disable packages, grant permissions or change settings. Preview the app through the TV's Apps screen before choosing Home. Never disable a stock launcher or setup/recovery package based on another model's procedure.
+It verifies the target and package/version, installs only for that profile, and cleans up its temporary APK. It does not connect ADB, choose default Home, disable packages, grant permissions, or change settings. Preview the app before choosing Home. Keep the original Home available; restore and verify it before uninstalling a deployed custom launcher. [Recovery tools](docs/device-recovery.md) are separately opt-in.
 
-See [device recovery](docs/device-recovery.md) for the separate opt-in backup/restore tools. Keep original Home available during evaluation. Restore and verify original Home **before uninstalling** a deployed custom launcher. No private backup, device address, account information or screen capture is included here.
+## Verification scope
 
-## Data and controls
+JVM tests cover catalog identity, malformed/partial results, cache bounds, concurrent fetch/coalescing, stale-first delivery, cancellation/recovery, request lanes, provider policy, and image-disk-cache behavior. Android tests cover actual bitmap/ImageView behavior, native UI/lifecycle flows, and synthetic TV Provider mapping. The live Cinemeta test requires explicit `liveCinemeta` opt-in. Test commands are repeatable verification recipes; their presence does not claim a particular checkout or device passed.
 
-- Continue Watching uses only actual entries published by retained apps through the TV provider. TV listings permission is optional. Private provider history may remain unavailable. Resume links must belong to their retained owner and resolve to an exported activity; unsupported links open that app instead. Highlighting a Continue Watching entry sends its title to Cinemeta for a conservative unique exact-title match. Published season/episode display numbers restrict matches to series; otherwise no media type is inferred. Ambiguous or unavailable results retain provider artwork and description; enrichment never changes the owner-validated resume identity.
-- Discovery/search use Cinemeta. Popular movie/series catalogs fill discovery; Featured catalogs fill the gallery. Exact genre queries use manifest-supported filters. Search also returns installed launchable TV apps locally, including offline; title results open their exact details in Stremio without autoplay. Cached/offline/error states remain honest. Cinemeta does not supply regional streaming availability or a person-search equivalent; the retired region/availability controls are removed.
-- The first Home catalog row visibly exposes all seven retained streaming apps in MRU order; Settings → Your apps offers the same apps. Genuine retained-provider preview channels follow when published; Cinemeta discovery is a separately labelled section. Optional usage access includes launches outside this home; without it only this launcher's launches count. Rearranging `Policy.PACKAGES` does not pin an order.
-- Weather uses Open-Meteo, with editable city (default Pune), without GPS permission.
-- Settings includes Inputs/Live TV, Wi-Fi, TV settings, optional permissions and safe installed TV apps. Native system dialogs use the platform UI.
+The frozen `CatalogLatencyBenchmark` measures cold Home completion with four fake sources delayed 40 ms each, two warm-ups, and nine samples. On one local JDK 25.0.3 run, the earlier sequential implementation had a 176.45 ms median (170.90–181.53 ms); concurrent fetching had a 46.41 ms median (44.27–46.68 ms), with all four sources and both result sections completed in every sample. This isolates source scheduling and does not establish real provider latency, TV frame rate, or native UI performance. Emulator and physical-TV checks must be reported separately from these measurements.
 
-The page is loaded from a trusted packaged HTTPS origin. External navigation, frames, popups, file/content access and mixed content are blocked. A main-frame exact-origin bridge accepts bounded operations. Credentials never enter JavaScript or diagnostics. Native network calls are allowlisted, timed out, bounded and cached. There is no analytics, accessibility service, fake playback/progress or continuous catalog polling.
-
-## Source and verification
-
-Presentation: `app/src/main/assets/ui/`; reference CSS is preserved in `reference.css`, with functional remote/error states in `functional.css`. Inter is bundled with its font license. Native bridge, app-owner validation, history and bounded network clients live in `app/src/main/java/local/tv/launcher/`.
-
-Historical UI evidence from before the Cinemeta migration and current gallery-navigation commit follows; these counts and interactions are not validation of the current revision. Independent release checks at that point passed: 22 Java tests, eight JavaScript navigation contracts, lint zero errors/seven warnings, signature verification, and exact reference CSS/font checks. Actual TV metrics confirmed a 1920×1080 CSS viewport, Inter 34px/41px at weight 700 and the reference queue geometry. This is evidence for the inspected build, not a promise for every Android TV/WebView. Check your device's viewport, real remote, keyboard, permission-denied and offline behavior after building. During the earlier UI work, the user explicitly requested larger typography and a visible Home app strip. Functional CSS therefore uses a large-TV type hierarchy (hero 48/56px, body 24/30px, controls 22/28px), widens Continue Watching to 420px, and shortens the hero to keep the first app strip and labels visible; original reference.css remains unchanged as provenance. Gallery is the startup focus: Left/Right changes features, Up enters only Home/Search/Settings, Down enters Continue Watching; further Down moves to apps, published provider rows and Cinemeta discovery. Up reverses that order. Left/Right changes items within each row. OK on a featured gallery item opens details, with Open in Stremio available there. Highlighting a real Continue Watching card updates the gallery from that provider’s title, description and artwork; OK on that selected gallery resumes its owner-validated program or opens its owning app. Left/Right returns to featured discovery. Gallery/top-navigation focus resets the page to the full top. Focus uses neutral scale/elevation/glow instead of blue rectangles. Clock/weather are not focus stops. That historical UI candidate passed an independently forced 53-task release build, 22 Java tests with no failures/errors, JavaScript navigation/startup contracts, four offline recovery-tool tests, and lint with zero errors/seven warnings. Actual TV checks confirmed rendered hero 48/56px and body 24/30px, the 420px queue with three complete compact rows, all seven Home app labels visible, gallery startup focus, and a clean page top. Remote mapping checks covered gallery/navigation/Continue Watching/apps transitions and top restoration; the final physical-remote confirmation by the user remains pending. These observations do not claim user acceptance of the latest revision.
-
-This repository does not include device-specific deployment journals or private viewing-history screenshots. No project-wide license has been selected; third-party assets retain their own rights and licenses. See [third-party notices](THIRD_PARTY_NOTICES.md) and the bundled Inter license. Metadata uses the official Cinemeta add-on.
-
-Gallery features advance every eight active seconds, with selector fill showing elapsed time. Interaction resets the interval; modals, backgrounding, and a selected Continue Watching hero pause it. Continue Watching is a horizontal thumbnail carousel with real playback progress inset in the image and title, remaining time (when published), and source beneath. App and discovery focus animate with scale and elevation, without borders.
-
-The revised Continue Watching pane uses a blurred image material, a large selected thumbnail and smaller centered neighboring previews. Selected metadata includes published season/episode display numbers, true remaining time, a short synopsis and source. Missing provider fields are hidden; optional-column fallback preserves the queue on providers without episode columns.
-
-Home apps, provider previews and Cinemeta artwork expand about 32% in both dimensions when focused, with neighbors moving aside. Artwork bottoms and unscaled labels share a baseline. Layout transitions reserve vertical space, and the selected item is revealed again after expansion so right-edge cards remain visible.
+No project-wide license has been selected. Third-party code, fonts, metadata, and artwork retain their respective licenses and rights; see [third-party notices](THIRD_PARTY_NOTICES.md).

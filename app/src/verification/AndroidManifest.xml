@@ -1,0 +1,8 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity android:name="local.tv.launcher.NativeUiTestActivity"
+            android:exported="false" android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen" />
+        <activity android:name="local.tv.launcher.NativeLifecycleTestActivity"
+            android:exported="false" android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen" />
+    </application>
+</manifest>

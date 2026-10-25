@@ -1,44 +1,44 @@
-# Cinemeta provider migration
+# Cinemeta catalog contracts
 
-## Inspected provider contract
+## Provider and native boundaries
 
-Verified against the official `https://v3-cinemeta.strem.io/manifest.json` (version 3.0.14) on 2026-10-25, with live movie and series catalog/search/detail responses. `movie` and `series` are supported; IDs use the IMDb `tt` prefix. `top` is **Popular**, accepting `search`, `genre`, `skip`; `imdbRating` is **Featured**, accepting `genre`, `skip`. `year` is **New**, requiring a year via `genre`. Last/calendar-video catalogs require explicit series IDs; these are not personalized recommendation sources. The public edge required an explicit client User-Agent for catalog requests in verification, so the existing transport sends `FudgeTV/2.0`.
+The official public add-on is `https://v3-cinemeta.strem.io`. The earlier provider inspection recorded manifest version 3.0.14 on 2026-10-25. `movie` and `series` resources use IMDb IDs beginning with `tt`; that inspection is historical contract evidence, not a claim that a later checkout has run the live test.
 
-## Feature migration map
+`top` supplies Popular catalogs and accepts title search/genre filters. `imdbRating` supplies Featured catalogs. Home interleaves Popular movie/series results into at most 24 entries and Featured results into four gallery entries. Exact genre searches use known manifest names. Catalog matches do not establish regional availability, subscriptions, or playable streams.
 
-| Existing boundary/feature | Replacement and behavior |
+`CatalogClient` normalizes provider JSON for native views; there is no web bridge. `MainActivity` coordinates native lifecycle/request lanes, and `NativeHomeView`/RecyclerView adapters render the results. Continue Watching retains provider-owned descriptions and artwork without cross-provider enrichment. Weather/geocoding and the former web presentation are removed.
+
+| Boundary | Current contract |
 | --- | --- |
-| `CatalogClient` authenticated v3 API, generated credential | Public Cinemeta HTTPS requests using existing `SecureHttp`, no keys or fallback provider |
-| Numeric `movie`/`tv` identity | Canonical `movie:tt…` / `series:tt…`, validated at bridge, lookup and Stremio boundaries |
-| Weekly trending discovery rail | Interleaved Popular movie and series catalogs, 24 items; UI explicitly says Popular, not trending or personalized |
-| Hard-coded featured IDs + metadata calls | Interleaved official Featured catalogs, four gallery entries, no per-card detail requests |
-| Multi-search including person known-for | Movie and series `top/search={encodedQuery}.json`, merged and deduplicated; person-specific discovery is unavailable |
-| Genre-name search | Verified manifest names mapped to `top/genre={encodedGenre}.json`; optional genre failure preserves successful title results |
-| Search presentation | Existing modal/cards/remote navigation retained; launchable TV apps searched locally immediately, remote titles debounced 320ms |
-| Details + credits | `/meta/{movie|series}/{imdbId}.json`; optional missing values remain empty/absent |
-| Regional JustWatch offers/settings | No Cinemeta equivalent. Removed availability claims/region control; existing unrelated saved preferences remain untouched |
-| Provider image path concatenation | Complete verified HTTPS image URLs, strict host/path checks; existing native memory/disk image pipeline |
-| Continue Watching metadata enrichment | Existing conservative title matcher uses Cinemeta, `series` for episodic records; only a unique exact-title match with a sparse synopsis triggers a cached detail lookup by IMDb ID. Original provider identity/resume intent remains authoritative |
-| Generic title app chooser | Reusable `StremioIntegration`, `ACTION_VIEW`, dynamically discovered registered `stremio` handlers; exact detail links, `autoPlay=false`, graceful missing-handler message |
-| Metadata cache | New `cinemeta_metadata_v1` private cache namespace, existing SHA-256 filenames, one-hour freshness, stale offline fallback and 8MiB oldest-entry eviction budget |
-| Build configuration / assets / attribution | No credential file, token, generated field or legacy provider logo; Cinemeta notices replace obsolete attribution |
+| Title identity | Canonical `movie:tt…` / `series:tt…`; type and IMDb ID validated before requests/launches |
+| Search | `/catalog/{movie|series}/top/search={encodedQuery}.json`; valid empty results remain valid |
+| Genre query | Known manifest genre filter; an optional failure preserves successful title results |
+| Details | `/meta/{movie|series}/{imdbId}.json`; missing optional values remain absent/empty |
+| Installed apps | Searched locally independently of catalog completion, including offline |
+| Title launch | Exact registered `stremio` detail handler, `autoPlay=false`, graceful missing-handler result |
+| Metadata storage | Private `cinemeta_metadata_v1`, SHA-256 filenames, one-hour freshness, 8 MiB oldest-entry budget |
+| Authentication | Public HTTPS only; no API key, credential file, login, or alternate metadata provider |
 
-## Metadata mapping
+## Mapping and network bounds
 
-`id` (or existing `imdb_id`) → string ID, IMDb ID and canonical key; `type` must match the requested resource. `name` → title; `description` → overview; `poster` / `background` → validated poster/backdrop; `releaseInfo` / `year` / `released` → year/range and release date. `imdbRating` → optional finite 0–10 rating. Runtime strings are retained and integer minutes mapped when explicitly formatted in minutes. `genres` or `genre`, cast names, director and writer lists are retained without inventing roles or photos.
+`id` (or `imdb_id`) becomes the canonical ID/key; returned type must match the requested resource. Name, description, year/release range, genres, cast, directors/writers, optional finite 0–10 rating, and explicitly formatted runtime minutes are retained without invented people, roles, or photos.
 
-Series `videos` preserve valid matching `tt…:season:episode` identities, season/episode numbers, titles, descriptions, release dates and validated thumbnails; seasons derive from those episodes. No arbitrary episode-count truncation is applied. Response bounds are 1MiB per catalog and 5MiB per detail (long-running real series exceed 1MiB), within the existing transport limit. The existing details screen has no episode-list UI; full normalized episodes stay in the native cached details, while the bridge omits unused episode arrays and catalog summaries strip videos before normalization. Valid responses above the explicit 5MiB limit fail gracefully and can use cached data.
+Series metadata preserves valid matching `tt…:season:episode` identities and derives seasons from them. Summary normalization skips episode lists without mutating the source object. Detail responses have a 5 MiB bound; catalogs have a 1 MiB bound. Larger responses fail gracefully and can use cached data. The native detail presentation does not claim episode playback support.
 
-Observed art hosts: `images.metahub.space`, `episodes.metahub.space`, `m.media-amazon.com`. The official add-on returns HTTP307 for non-search catalogs to `https://cinemeta-catalogs.strem.io/{catalog}/catalog/{type}/{catalog}…`; the transport permits this one verified HTTPS handoff only when the exact original catalog path is preserved. All other API redirects, repeated hops and weather redirects are refused. Some episode-thumbnail URLs redirect to the retired image provider and are deliberately unavailable: the image loader rejects that hop and uses its existing graceful image failure state. Generic provider artwork remains supported for unrelated apps, but exact retired-provider domains/subdomains are rejected at every image redirect hop so no legacy artwork can reintroduce those network calls.
+Allowed catalog art hosts are `images.metahub.space`, `episodes.metahub.space`, and `m.media-amazon.com`, with strict resource-path checks. The transport permits one HTTP 307 handoff from the official add-on to `https://cinemeta-catalogs.strem.io/{catalog}/catalog/{type}/{catalog}…` only when the original catalog path is preserved exactly. Other API redirects are refused. Generic artwork from installed-app TV Provider records uses the separate image boundary; retired metadata-provider domains are rejected at every redirect hop.
 
-## Persisted identity and user-data preservation
+The HTTPS client sends `FudgeTV/2.0`, bounds reads, preserves interruption, sets five-second socket timeouts, and checks a shared ten-second elapsed-time budget across redirect/read operations. Platform DNS and socket behavior still govern actual interruption latency; this is not a measured end-to-end provider SLA.
 
-Inspection found no launcher favorites, watchlist, continue-progress database or saved metadata references. `titles` is transient; the former numeric catalog IDs lived only in disposable `catalog_metadata` cached envelopes. User history uses app-package keys; recommendation visibility/order uses provider/channel identity; watch progress and resume links come from the Android TV provider. These remain unchanged.
+## Concurrency, caching, and failures
 
-The old metadata directory is preserved untouched and never read as Cinemeta data; it is neither renamed nor rewritten. Its numeric IDs have no trustworthy IMDb cross-reference in the old normalized model, and Cinemeta has no supported numeric-ID lookup resource, so no speculative title match or unauthenticated legacy API fallback is used. Existing user-owned provider records are never discarded. If a future importer handles numeric-ID-only user records, it must retain unresolved records until a verified IMDb cross-reference or explicit user selection is available. Existing IMDb IDs already work directly. The retired secret preference is removed; unrelated old region preference is left in place but unused.
+Four bounded source workers fetch the independent Home catalogs concurrently without using the request-lane executor for child work. Caller interruption cancels unfinished source futures and removes canceled queued work. Identical concurrent lookups share one in-flight fetch, while every consumer receives a separate mutable JSON tree.
 
-## Reliability and validation boundaries
+`cachedHome()` performs disk-only delivery with a truthful `stale` flag. A fresh cache ends loading; a stale envelope can render immediately while `home()` refreshes it. Source failures preserve successful independent results and mark partial output. Partial envelopes never overwrite a complete cache. A nonempty provider array with no valid normalized entries is treated as invalid data; an actual empty array remains a legitimate empty result. Total provider failure returns stale cache or an explicit error.
 
-Networking/parsing remains on the existing bounded executor. Requests deduplicate via the compatible cache, no authentication refresh/dependency is introduced. Source failures preserve independent successful catalogs/search results, mark partial output, and avoid caching incomplete envelopes. Fully unavailable providers return stale cached data or an honest error. Local app search does not depend on network completion. Search edits and modal close invalidate stale results and cancel native work; requests and lifecycle generations suppress late delivery. Transport checks interruption between bounded reads; an in-flight socket can take up to its existing timeout to finish. D-pad keys survive asynchronous result replacement and a removed focused result falls back to the search field.
+The activity coalesces obsolete Home/Search/Details requests in independent lanes and cancels them on pause/destruction. Generations prevent late delivery. Search edits/close cancel pending remote work while local app search stays available. `CatalogClient.close()` cancels in-flight operations and releases its source executor.
 
-JVM tests cover fresh-cache request suppression, stale offline fallback, error states, legacy cache isolation, partial-source failures, disk budgets, URL/ID/type boundaries, query escaping/endpoints, genre aliases, exact Stremio links, sparse/rich metadata mapping, episode identity, deduplication and heavy catalog summary reduction. An executable Node harness covers offline app results, remote debounce/stale suppression, deduplication, result focus restoration/removal and query/modal cancellation. A separate executable enrichment harness verifies unique sparse-title followup, no repeated lookup loop, failure retention, wrong identity/title/key suppression and episodic ambiguity. Device navigation, missing-handler/offline behavior, build/lint and full test evidence must be reported from the final validated revision; this document does not itself claim those checks passed.
+## Persisted identities and verification
+
+The earlier numeric-ID `catalog_metadata` cache remains untouched and is never read as Cinemeta metadata. There is no trustworthy automatic numeric-to-IMDb conversion, so no speculative lookup or legacy provider fallback runs. User-owned provider records, app-use history, recommendation settings, and owner-validated resume links keep their existing identities. The retired credential preference is removed; unrelated saved preferences are preserved.
+
+JVM tests cover cache suppression/stale fallback, malformed and partial results, true empty searches, bounded storage, URL/type/ID policy, metadata/episode mapping, concurrent completion, in-flight coalescing, JSON isolation, stale-first delivery, follower cancellation, shutdown, and cancellation/recovery. The frozen `CatalogLatencyBenchmark` measures fake-source scheduling only; see README for its measured scope. Native Android fixture tests use the unminified `verification` variant, with fixture activities declared only in the target verification app; an actual optimized release launch is a separate check. The opt-in `CinemetaLiveTest` supplies separate provider-contract evidence. No historical JavaScript checks are used to validate the native interface.

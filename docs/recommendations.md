@@ -2,11 +2,11 @@
 
 Platform references: [Android TV channels](https://developer.android.com/training/tv/discovery/recommendations-channel), [AOSP provider permissions](https://android.googlesource.com/platform/packages/providers/TvProvider/+/refs/heads/main/AndroidManifest.xml), and [AOSP query filtering](https://android.googlesource.com/platform/packages/providers/TvProvider/+/refs/heads/main/src/com/android/providers/tv/TvProvider.java).
 
-The existing launcher displays preview channels published through Android's TV Provider and a separate Continue Watching queue from Watch Next. It does not supply Google TV's personalized Discover feed. Installed apps must publish records and the provider must permit this launcher's UID to read them; installing an app does not guarantee a recommendation row.
+The native launcher displays preview channels published through Android's TV Provider and a separate Continue Watching queue from Watch Next. It does not supply Google TV's personalized Discover feed. Installed apps must publish records and the provider must permit this launcher's UID to read them; installing an app does not guarantee a recommendation row.
 
 ## Architecture
 
-`Recommendations` is the replaceable provider source; `Library` assembles installed apps and the recommendation snapshot. Native code queries `TvContract` channels, preview programs and Watch Next off the UI thread. The existing Java/WebView bridge sends sanitized display metadata and opaque item IDs. Content launches remain native, validate the originating package and link, and fall back to the installed app when a link fails. The existing UI renders horizontal, D-pad navigable channel rows with lazy artwork and stable focus keys. Watch Next stays separate, and playback progress appears only for valid duration and position values.
+`Recommendations` is the replaceable provider source; `Library` assembles installed apps and the recommendation snapshot. Native code queries `TvContract` channels, preview programs and Watch Next off the UI thread. Native view models carry sanitized display metadata and opaque item IDs to RecyclerView adapters. Content launches validate the originating package and link, and fall back to the installed app when a link fails. Native horizontal RecyclerViews render D-pad navigable channel rows with shared bitmap loading and stable item identities. Watch Next stays separate, and playback progress appears only for valid duration and position values.
 
 `MainActivity` observes channels, preview programs and Watch Next while resumed. Provider notifications are debounced by 400 ms; package changes and foreground entry also refresh the snapshot. Lifecycle cleanup removes observers and pending refreshes, and cancels obsolete query work. Provider availability and query failures are reported independently so a restricted source does not disable the launcher.
 
@@ -20,7 +20,7 @@ Becoming the default Home application alone grants no broader provider access. A
 
 ## Real-device verification
 
-On 2026-10-25, the signed release and instrumentation pair was tested on Sony BRAVIA 4K VH21, Android API 31, user 0, with Fudge already the default Home and READ_TV_LISTINGS granted. All nine instrumentation tests passed. The actual target-UID probe reported preview channels `empty` (zero rows) and Watch Next `available` (two items under the test’s temporary maximum of two); original preferences were restored. A normal foreground refresh then reported 18 Continue Watching items. This verifies accessible Watch Next records on this firmware, not unrestricted preview access. The final installed candidate passed a second instrumentation run: nine tests, 2.604 seconds. The home screen showing 18 Continue Watching items and the TV controls menu containing Recommendations were inspected. The native recommendation settings panel, actual content launching and publisher-driven observer notifications were not live verified; those still require device checks. Synthetic provider tests cover failure handling and mapping, and lifecycle unit tests cover observer registration callbacks, cancellation and debouncing. Google TV and AOSP devices remain unverified. Local fake-source tests establish implementation behavior, not third-party accessibility on other firmware. Test each device with an app known to publish TV Provider content, and record model, firmware/API version, Home role, effective permissions, capability state and returned counts.
+Earlier provider instrumentation on Sony BRAVIA 4K VH21/API 31 reported visible Watch Next records and no visible preview channels for the launcher UID. Those observations belong to the previous presentation and do not validate the native UI or this release. Native UI/lifecycle/image instrumentation, provider-access checks, and physical remote acceptance must be run and reported for the candidate being evaluated. Synthetic provider tests establish mapping and failure behavior, not third-party accessibility on other firmware.
 
 | Device/setup | Evidence to collect |
 | --- | --- |
@@ -29,25 +29,27 @@ On 2026-10-25, the signed release and instrumentation pair was tested on Sony BR
 | AOSP-based TV | Provider presence and effective app permissions; test both empty and publisher-populated datasets where available. |
 | Default Home launcher | Repeat the same checks after selecting Fudge as Home through system settings; compare actual results, without assuming additional access. |
 
-Useful commands (replace the serial when multiple devices are connected):
+Device inspection commands (always select the intended serial):
 
 ```sh
 adb devices
-adb shell getprop ro.build.version.release
-adb shell getprop ro.build.version.sdk
-adb shell getprop ro.build.fingerprint
-adb shell dumpsys package local.tv.launcher
-adb shell cmd role get-role-holders android.app.role.HOME
-adb shell am start -a android.intent.action.MAIN -c android.intent.category.LEANBACK_LAUNCHER -p local.tv.launcher
-adb logcat -d -s FudgeRecommendations:I
+adb -s "$TV_SERIAL" shell getprop ro.build.version.release
+adb -s "$TV_SERIAL" shell getprop ro.build.version.sdk
+adb -s "$TV_SERIAL" shell getprop ro.build.fingerprint
+adb -s "$TV_SERIAL" shell dumpsys package local.tv.launcher
+adb -s "$TV_SERIAL" shell cmd role get-role-holders android.app.role.HOME
+adb -s "$TV_SERIAL" shell am start -a android.intent.action.MAIN -c android.intent.category.LEANBACK_LAUNCHER -p local.tv.launcher
 ```
 
-The package dump shows requested and granted permissions; inspect it locally rather than sharing unrelated device information. The role command may be unavailable on some builds. `FudgeRecommendations` logs capability states and row/Continue Watching counts from queries performed inside the launcher process. It intentionally does not log titles or deep links. A shell `content query` runs under the shell UID and is **not evidence** that the launcher has equivalent access. Do not use protected-permission grants as a workaround.
+The package dump shows requested and granted permissions; inspect it locally rather than sharing unrelated device information. The role command may be unavailable on some builds. Inspect the native Continue Watching/provider-row status text and **Settings → TV controls & data access → Recommendations** for the current capability-dependent controls. For exact launcher-UID capability states and counts, run the explicitly selected verification instrumentation probe `RecommendationsTest.actualProviderCapabilityProbeDoesNotAssumeVisibility`. That test writes its capability/count summary to the test-only `FudgeRecommendationProbe` tag; collect it afterward with `adb -s "$TV_SERIAL" logcat -d -s FudgeRecommendationProbe:I`. The normal native app has no dedicated recommendation logcat tag. A shell `content query` runs under the shell UID and is **not evidence** that the launcher has equivalent access. Do not use protected-permission grants as a workaround.
 
 For each supported dataset, exercise horizontal and vertical D-pad navigation, focus restoration after refresh/removal, missing artwork, portrait artwork, RTL, and long catalogs. Play a recommendation and confirm its originating app opens the intended content. Test a broken link and app removal; stale entries must disappear and launch failures must remain recoverable. Publish/update/remove records while the launcher is foregrounded, then repeat with the launcher paused and resumed. Toggle visibility, ordering, global and Continue Watching settings and verify persistence after restart. Denied/unavailable providers must leave installed-app launching functional.
 
 Record outcomes separately: **implemented and locally verified**, **device verification required**, **restricted by this firmware's permissions**, and **unsupported through public APIs**. A restricted device is a valid graceful-fallback result, not successful cross-app recommendation access.
 
-Implementation limits: discover at most 64 channel records, show at most 12 populated visible rows, and retain at most 40 items per row. Each provider cursor scan examines at most 5,000 records, so exceptionally large catalogs may be truncated. The WebView uses bounded row DOM and lazy artwork instead of native RecyclerView recycling. Artwork uses an access-ordered 1,024-entry registry, an 8 MiB byte cache and a 16 MiB disk cache.
+Implementation limits: discover at most 64 channel records, show at most 12 populated visible rows, and retain at most 40 items per row. Each provider cursor scan examines at most 5,000 records, so exceptionally large catalogs may be truncated. Native nested RecyclerViews recycle rows and cards, retain stable identities, and diff updates asynchronously. The image loader uses a 12 MiB bitmap memory budget, a 16 MiB disk budget, two workers, and at most 64 in-flight image keys; artwork is decoded at the requested target size.
 
-Automated Android tests use an injected source and platform cursors for mapping, malformed records, failures, sorting, deduplication, bounds and safe links. The separate actual-provider probe queries through the target application context and reports only capability states/counts. Build the signed release pair with `:app:assembleRelease :app:assembleReleaseAndroidTest`; the test runner is `local.tv.launcher.test/androidx.test.runner.AndroidJUnitRunner`. Running instrumentation temporarily exercises recommendation preferences and restores their original values afterward. Fake-source tests are not evidence that another app’s records are accessible.
+Automated Android tests use an injected source and platform cursors for mapping, malformed records, failures, sorting, deduplication, bounds and safe links. The separate actual-provider probe queries through the target application context and reports only capability states/counts. Build the unminified signed fixture-verification pair with `./build.sh :app:assembleVerification :app:assembleVerificationAndroidTest`; the test runner is `local.tv.launcher.test/androidx.test.runner.AndroidJUnitRunner`. Running instrumentation temporarily exercises recommendation preferences and restores their original values afterward. Fake-source tests are not evidence that another app’s records are accessible.
+
+
+For a task-owned local emulator, `./verify-android.sh --serial emulator-5560` installs and runs the verification test pair, which uses production sources with shrinking and minification disabled for deterministic fixtures. The actual release APK must be launched and checked separately. The script rejects physical targets; it never changes default Home or system packages. Provider capability results on an emulator do not establish access on a real TV.

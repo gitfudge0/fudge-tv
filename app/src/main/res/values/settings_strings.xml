@@ -1,0 +1,4 @@
+<resources>
+    <string name="recommendations_settings_title">Recommendations</string>
+    <string name="recommendations_settings_access_explanation">Only content this TV provider permits the launcher to read is shown. TV listings permission does not guarantee access to other apps’ previews or watch history.</string>
+</resources>

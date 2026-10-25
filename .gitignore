@@ -17,3 +17,5 @@ api.key
 
 __pycache__/
 *.pyc
+
+node_modules/

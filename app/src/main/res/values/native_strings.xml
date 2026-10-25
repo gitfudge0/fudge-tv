@@ -1,0 +1,10 @@
+<resources>
+    <string name="runtime_minutes">%1$s min</string>
+    <string name="imdb_rating">IMDb %1$s</string>
+    <string name="empty_items">No items available.</string>
+    <string name="current_page">Current page</string>
+    <string name="media_film">FILM</string>
+    <string name="media_series">SERIES</string>
+    <string name="media_type_source">%1$s · Cinemeta</string>
+    <string name="starring_names">Starring %1$s</string>
+</resources>
