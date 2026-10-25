@@ -103,6 +103,21 @@ public class RecommendationInitializationTest {
   }
 
   @Test
+  public void browserPublisherIsSkippedBeforePackageInspection() {
+    Fixture fixture = new Fixture();
+    fixture.add("Receiver");
+    RecommendationInitialization.initialize(
+        context,
+        Arrays.asList(
+            new Library.App("com.vewd.core.integration.dia", "Browser", null),
+            new Library.App(owner, "Fixture", null)),
+        null,
+        fixture);
+    assertEquals(1, fixture.sent.size());
+    assertEquals(owner, fixture.sent.get(0).getPackage());
+  }
+
+  @Test
   public void dispatchIsExplicitOncePerReceiverAndVersion() {
     Fixture fixture = new Fixture();
     fixture.add("First");

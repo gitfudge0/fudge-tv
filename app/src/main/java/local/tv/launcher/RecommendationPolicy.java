@@ -6,6 +6,10 @@ import java.util.*;
 final class RecommendationPolicy {
   private RecommendationPolicy() {}
 
+  static boolean eligibleOwner(String owner) {
+    return owner != null && !owner.isEmpty() && !"com.vewd.core.integration.dia".equals(owner);
+  }
+
   static int limit(int requested) {
     return Math.max(1, Math.min(40, requested));
   }

@@ -6,6 +6,15 @@ import org.junit.Test;
 
 public class RecommendationPolicyTest {
   @Test
+  public void browserPublisherIsExcludedWithoutExcludingStreamingApps() {
+    assertFalse(RecommendationPolicy.eligibleOwner("com.vewd.core.integration.dia"));
+    assertFalse(RecommendationPolicy.eligibleOwner(null));
+    assertFalse(RecommendationPolicy.eligibleOwner(""));
+    assertTrue(RecommendationPolicy.eligibleOwner("com.amazon.amazonvideo.livingroom"));
+    assertTrue(RecommendationPolicy.eligibleOwner("com.apple.atve.androidtv.appletv"));
+  }
+
+  @Test
   public void progressRequiresCompleteValidMetadata() {
     assertTrue(RecommendationPolicy.validProgress(50, 100));
     assertTrue(RecommendationPolicy.validProgress(0, 100));

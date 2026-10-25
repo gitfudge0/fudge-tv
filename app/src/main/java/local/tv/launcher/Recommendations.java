@@ -63,7 +63,8 @@ final class Recommendations {
     }
     out.providerAvailable = true;
     Set<String> owners = new HashSet<>();
-    for (Library.App app : out.allApps) owners.add(app.id);
+    for (Library.App app : out.allApps)
+      if (RecommendationPolicy.eligibleOwner(app.id)) owners.add(app.id);
     int limit = RecommendationPolicy.limit(prefs.getInt("maxItems", 20));
     readChannels(context, out, signal, owners, limit, prefs, source);
     if (prefs.getBoolean("watchNext", true))

@@ -4,6 +4,8 @@ Platform references: [Android TV channels](https://developer.android.com/trainin
 
 The native launcher displays one recommendation row per installed app, merging its preview channels published through Android's TV Provider and a separate Continue Watching queue from Watch Next. It does not supply Google TV's personalized Discover feed. Installed apps must publish records and the provider must permit this launcher's UID to read them; installing an app does not guarantee a recommendation row.
 
+Browser recommendations from the Vewd publisher (`com.vewd.core.integration.dia`) are excluded from preview rows, Continue Watching, and publisher initialization. The browser remains available for app launching and search.
+
 ## Architecture
 
 `Recommendations` is the replaceable provider source; `Library` assembles installed apps and the recommendation snapshot. Native code queries `TvContract` channels, preview programs and Watch Next off the UI thread. Native view models carry sanitized display metadata and opaque item IDs to RecyclerView adapters. Content launches validate the originating package and link, and fall back to the installed app when a link fails. Duplicate titles (normalized for case and spacing), content IDs, and validated content targets are removed within each app; content type and season/episode metadata keep distinct episodes separate. Apps retain their own launch targets, and the same title can appear under different apps. The row heading uses the installed app label. Native horizontal RecyclerViews render D-pad navigable app rows with shared bitmap loading and stable item identities. Watch Next stays separate, and playback progress appears only for valid duration and position values.

@@ -59,7 +59,8 @@ final class RecommendationInitialization {
       Set<String> seen = new HashSet<>();
       for (Library.App app : apps) {
         check(signal);
-        if (app == null || app.id == null || !seen.add(app.id)) continue;
+        if (app == null || !RecommendationPolicy.eligibleOwner(app.id) || !seen.add(app.id))
+          continue;
         try {
           PackageInfo info = source.packageInfo(app.id);
           String revision = info.getLongVersionCode() + ":" + info.lastUpdateTime;

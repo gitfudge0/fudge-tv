@@ -137,6 +137,27 @@ public class RecommendationsTest {
   }
 
   @Test
+  public void browserChannelsAndWatchNextAreExcludedBeforeLaunchResolution() {
+    owner = "com.vewd.core.integration.dia";
+    Library.Snapshot result = snapshot(true);
+    Context noLaunchResolution =
+        new ContextWrapper(context) {
+          @Override
+          public android.content.pm.PackageManager getPackageManager() {
+            throw new AssertionError("Browser recommendations must not resolve launches");
+          }
+        };
+    FakeSource source = new FakeSource();
+    Recommendations.load(noLaunchResolution, result, null, source);
+    assertTrue(result.recommendationChannels.isEmpty());
+    assertTrue(result.channels.isEmpty());
+    assertTrue(result.programs.isEmpty());
+    assertEquals(2, source.calls); // Channels and Watch Next only; no browser preview queries.
+    assertEquals(1, result.allApps.size());
+    assertEquals(owner, result.allApps.get(0).id);
+  }
+
+  @Test
   public void mappingSkipsMalformedAndStaleRecordsAndPreservesMetadata() {
     Library.Snapshot result = snapshot(true);
     Recommendations.load(context, result, null, new FakeSource());
