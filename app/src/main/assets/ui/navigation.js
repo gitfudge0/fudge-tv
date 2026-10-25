@@ -21,5 +21,7 @@
   function galleryActivation(watchHero){return watchHero?{op:'resume',id:watchHero.id}:null;}
   function maySettleStartup(interacted,modal){return !interacted&&!modal;}
   function resetsViewport(zone){return zone==='nav'||zone==='gallery'||zone==='queue';}
-  const api={clamp,score,nearest,homeStep,heroForProgram,reconcileWatchHero,galleryActivation,maySettleStartup,resetsViewport};scope.FudgeNav=api;if(typeof module!=='undefined')module.exports=api;
+  function carouselStep(elapsed,delta,eligible,interval=8000){return eligible?{elapsed:(elapsed+delta)%interval,advance:elapsed+delta>=interval}:{elapsed:0,advance:false};}
+  function matchProgram(title,items,episodic=false){const normalize=s=>String(s||'').normalize('NFKC').toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();const key=normalize(title);if(!key)return null;const found=items.filter(item=>(!episodic||item.mediaType==='tv')&&normalize(item.title)===key);return found.length===1?found[0]:null;}
+  const api={carouselStep,matchProgram,clamp,score,nearest,homeStep,heroForProgram,reconcileWatchHero,galleryActivation,maySettleStartup,resetsViewport};scope.FudgeNav=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window==='undefined'?globalThis:window);

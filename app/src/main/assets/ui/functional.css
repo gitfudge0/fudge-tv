@@ -40,3 +40,91 @@ input:focus-visible{box-shadow:0 0 0 2px #ffffffd0,0 8px 24px #0006}.dot.tv-focu
 .queue .resume-time{display:block;font-size:18px;line-height:23px;margin-top:3px}
 .queue .resume-sub{grid-column:2;grid-row:2;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0;font-size:18px;line-height:25px;align-self:start}
 .queue .resume.tv-focused{border-radius:14px;box-shadow:0 7px 16px #0008,0 0 0 2px #ffffffb0,0 0 12px #ffffff18}
+
+/* Horizontal Continue Watching composition; reference.css remains untouched. */
+.queue{width:480px;right:3.5%;top:150px;height:520px;padding:25px 0 20px;background:#14151be6;border:0;overflow:hidden;border-radius:24px}
+.queue-head{padding:0 28px 20px}.queue-head h2{font-size:30px;line-height:37px;white-space:nowrap}
+.queue-scroll{display:flex;position:relative;gap:24px;height:415px;padding:12px 28px 18px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;scroll-padding-left:28px}
+.queue-scroll::-webkit-scrollbar{display:none}.queue-scroll:after{content:'';flex:0 0 74px}
+.queue .resume{display:flex;flex:0 0 370px;flex-direction:column;align-items:stretch;gap:0;width:370px;height:365px;margin:0;padding:0;background:transparent;border:0;border-radius:16px;text-align:left;transform-origin:center 110px}
+.queue .resume-art{position:relative;flex:none;width:100%;height:208px;align-self:auto;border-radius:16px;overflow:hidden;background-size:cover;background-position:center}
+.queue .resume-info{display:block;width:100%;margin:17px 0 0}.queue .resume-title{font-size:24px;line-height:30px;-webkit-line-clamp:2}.queue .resume-time{margin-top:7px;font-size:19px;line-height:25px}.queue .resume-sub{display:block;margin-top:5px;font-size:18px;line-height:25px;align-self:auto}
+.queue .progress{z-index:2;position:absolute;left:14px;right:14px;bottom:13px;height:5px;margin:0;background:#ffffff55;border-radius:4px;overflow:hidden}.queue .progress i{display:block;height:100%;background:#fff}
+.queue .resume.tv-focused{transform:scale(1.025);background:transparent;box-shadow:none}.queue .resume.tv-focused .resume-art{box-shadow:0 12px 24px #0009}.queue .resume-play{border:0}
+.card{transform-origin:center center;will-change:transform}.card.tv-focused{transform:translateY(-6px) scale(1.09);box-shadow:none;z-index:2}.card.tv-focused .card-art{box-shadow:0 20px 35px #000a;border:0}.card.tv-focused .card-art:after{opacity:0}.home-row,.rail{padding-top:25px;padding-bottom:25px}.card,.card-art{transition:transform 260ms cubic-bezier(.2,.8,.2,1),box-shadow 260ms ease}
+.dots .dot{position:relative;overflow:hidden}.dots .dot.selected{width:42px;background:#ffffff40}.dots .dot.selected:after{content:'';position:absolute;inset:0 auto 0 0;width:var(--gallery-progress,0%);background:white;border-radius:inherit}
+@media(max-width:1000px){.queue{width:38%;right:3%;}.queue .resume{flex-basis:85%;width:85%}.queue .resume-art{height:180px}.queue-head h2{font-size:25px}}
+@media(max-width:720px){.queue{position:relative;top:auto;right:auto;width:88%;margin:8px 6% 34px}.queue .resume{flex-basis:80%;width:80%}}
+/* Separate from :focus-visible groups for older TV WebViews. */
+button:focus,button.tv-focused{outline:none;outline-offset:0;-webkit-tap-highlight-color:transparent}
+button.card.tv-focused{transform:translateY(-6px) scale(1.09);border:0;box-shadow:none}
+button.card.tv-focused .card-art{border:0;box-shadow:0 20px 35px #000a}
+
+/* Revised sketch: a blurred material panel and a smaller, centered next preview. */
+.hero{height:750px}.hero-bottom{bottom:80px}.queue{width:520px;right:1.5%;top:140px;height:560px;padding:25px 0 20px;background:none;backdrop-filter:none;box-shadow:none;border-radius:0;isolation:isolate;overflow:hidden}
+.queue-material{position:absolute;inset:0 50px 0 0;z-index:-1;overflow:hidden;border-radius:24px;background:#11151b99;backdrop-filter:blur(30px)}
+#queueBackdrop{position:absolute;inset:-50px;background-size:cover;background-position:center;filter:blur(35px);opacity:.65;transform:scale(1.15)}
+.queue-material:after{content:'';position:absolute;inset:0;background:linear-gradient(120deg,#10131b99,#10131bcc)}
+.queue-head{padding-right:80px}.queue-scroll{height:470px;gap:15px;padding-left:28px;padding-right:28px}.queue .resume{flex-basis:360px;width:360px;height:430px;transform:none;background:none;box-shadow:none}
+.queue .resume-art{height:203px;transform:scale(.82);transform-origin:center center;transition:transform 260ms cubic-bezier(.2,.8,.2,1),box-shadow 260ms ease}
+.queue .resume.is-selected .resume-art{transform:scale(1);box-shadow:0 14px 28px #0007}
+.queue .resume-info,.queue .resume-sub{visibility:hidden}.queue .resume.is-selected .resume-info,.queue .resume.is-selected .resume-sub{visibility:visible}
+.queue .resume.tv-focused{transform:none;background:none;box-shadow:none}.queue .resume-info{margin-top:16px}.resume-episode{display:block;font-size:18px;line-height:24px;color:#ccc;margin-top:5px}.queue .resume-time{margin-top:5px}
+.queue .resume-description{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:18px;line-height:24px;color:#e0e0e3;margin:8px 0 0}.queue .resume-sub{margin-top:auto;padding-top:10px;padding-bottom:7px;color:#d0d0d4}
+@media(max-width:1000px){.queue{width:40%;right:1%}.queue .resume{flex-basis:85%;width:85%}.queue-head{padding-right:55px}}
+@media(max-width:720px){.queue{width:94%;right:auto;margin-left:6%;margin-right:0}.queue .resume{flex-basis:77%;width:77%}.hero{height:760px}}
+
+.queue .resume-description[hidden]{display:none}
+/* Selected home artwork expands in layout, moving its neighbors aside. */
+.hero{height:710px}.hero-bottom{bottom:50px}
+.home-row,.rail{display:flex;align-items:flex-end;gap:20px;overflow-x:auto;scroll-snap-type:none;padding:25px 6px 20px}
+.home-row{min-height:302px}.home-apps .home-row{min-height:248px}.rail{min-height:420px}
+.home-row button.card,.rail button.card{flex:0 0 260px;width:260px;min-width:0;transform:none;transition:flex-basis 280ms cubic-bezier(.2,.8,.2,1),width 280ms cubic-bezier(.2,.8,.2,1);will-change:auto}
+.home-row button.card .card-art{height:146px;aspect-ratio:auto;transition:height 280ms cubic-bezier(.2,.8,.2,1),box-shadow 280ms ease;transform:none}
+.home-row button.card.tv-focused{flex-basis:343px;width:343px;transform:none;box-shadow:none}
+.home-row button.card.tv-focused .card-art{height:193px;transform:none;box-shadow:0 18px 34px #0009}
+.home-apps .home-row button.card{flex-basis:220px;width:220px}.home-apps .home-row button.card .card-art{height:124px}
+.home-apps .home-row button.card.tv-focused{flex-basis:290px;width:290px}.home-apps .home-row button.card.tv-focused .card-art{height:164px}
+.rail button.card{flex-basis:400px;width:400px}.rail button.card .card-art{height:225px;aspect-ratio:auto;transform:none;transition:height 280ms cubic-bezier(.2,.8,.2,1),box-shadow 280ms ease}
+.rail button.card.tv-focused{flex-basis:528px;width:528px;transform:none;box-shadow:none}.rail button.card.tv-focused .card-art{height:297px;transform:none;box-shadow:0 18px 34px #0009}
+.home-row .card h3,.rail .card h3{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.home-row .card p,.rail .card p{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:25px}
+/* The material stays fixed while the thumbnail viewport reveals neighboring items. */
+.queue{border-radius:24px;overflow:visible}.queue-material{inset:0}
+@media(min-width:1001px){.queue{width:554px}}
+
+/* One content edge for weather, queue and app artwork. */
+:root{--home-edge:6%}
+.nav{right:var(--home-edge)}
+.queue{right:var(--home-edge)}
+.queue-head{justify-content:flex-start;gap:14px;padding-right:28px}
+.content{padding-right:calc(var(--home-edge) - 6px)}
+.queue-material{background:#11151b66}
+.queue-material:after{background:linear-gradient(120deg,#10131b66,#10131b99)}
+#queueBackdrop{opacity:.5}
+/* Metadata belongs to the panel, outside the thumbnail scrolling surface. */
+.queue-scroll{height:230px;padding-bottom:15px}
+.queue .resume{height:203px}
+.queue .resume.is-selected .resume-art{transform:scale(1);box-shadow:0 14px 28px #0007}
+.queue .resume-art{transition:transform 150ms cubic-bezier(.2,.8,.2,1),box-shadow 150ms ease}
+.queue-details{position:absolute;left:28px;right:28px;top:320px;bottom:20px;display:flex;flex-direction:column}
+.queue-details .resume-info{visibility:visible;margin:0;width:360px;max-width:100%}
+.queue-details .resume-sub{visibility:visible;margin-top:auto;padding-bottom:7px}
+.queue-details .resume-title{font-size:24px;line-height:30px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.queue-details .resume-description{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:18px;line-height:24px;color:#e0e0e3;margin:8px 0 0}
+.queue-details .resume-description[hidden]{display:none}
+/* Reserve the focused height so centering never follows a shrinking row. */
+.home-apps .home-row{height:248px}
+@media(max-width:720px){.queue{right:auto}.queue-details{top:320px}}
+.queue-details .resume-info{align-self:stretch}
+
+/* A shared animation clock keeps outgoing and incoming layout widths complementary. */
+.home-row button.card,.rail button.card{transition:none}
+.home-row button.card .card-art,.rail button.card .card-art{transition:box-shadow 280ms ease}
+
+/* Only the thumbnail strip overflows the panel; viewport clipping prevents page overflow. */
+.queue-scroll{position:absolute;left:-72px;top:94px;width:calc(100% + 72px + 6vw);height:230px;padding:12px 0 15px;display:block;overflow:hidden;scroll-padding:0}
+.queue-scroll:after{display:none}
+.queue-track{position:relative;display:flex;gap:15px;width:max-content;padding:0 0 0 100px;transition:transform 150ms cubic-bezier(.2,.8,.2,1);will-change:transform}
+.queue-scroll>.empty{margin:0 6vw 0 100px;padding-top:20px}
+@media(min-width:1001px){.hero-copy{width:54%}}
+@media(max-width:1000px){.queue-scroll{left:-30px;width:calc(100% + 30px + 6vw)}.queue-track{padding-left:58px}}
