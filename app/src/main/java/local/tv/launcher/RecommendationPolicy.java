@@ -31,6 +31,25 @@ final class RecommendationPolicy {
     return Integer.MAX_VALUE;
   }
 
+  static String titleKey(String title, int type, String season, String episode) {
+    return normalize(title)
+        + "\u0000"
+        + type
+        + "\u0000"
+        + normalize(season)
+        + "\u0000"
+        + normalize(episode);
+  }
+
+  private static String normalize(String value) {
+    return value == null
+        ? ""
+        : java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFKC)
+            .trim()
+            .replaceAll("\\s+", " ")
+            .toLowerCase(Locale.ROOT);
+  }
+
   static String artwork(String raw) {
     if (raw == null || raw.length() > 8192) return null;
     String lower = raw.toLowerCase(Locale.ROOT);

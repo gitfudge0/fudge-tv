@@ -11,7 +11,7 @@ import java.util.*;
 
 /** Reads only records actually exposed to this UID. Home status grants no assumed access. */
 final class Recommendations {
-  private static final int MAX_CHANNELS = 64, MAX_VISIBLE_ROWS = 12, MAX_SCAN = 5000;
+  private static final int MAX_CHANNELS_PER_APP = 64, MAX_VISIBLE_ROWS = 12, MAX_SCAN = 5000;
 
   private Recommendations() {}
 
@@ -92,9 +92,8 @@ final class Recommendations {
         return;
       }
       int scanned = 0;
-      while (cursor.moveToNext()
-          && scanned++ < MAX_SCAN
-          && out.recommendationChannels.size() < MAX_CHANNELS) {
+      Map<String, Integer> channelCounts = new HashMap<>();
+      while (cursor.moveToNext() && scanned++ < MAX_SCAN) {
         check(signal);
         try {
           long id = number(cursor, "_id", -1);
@@ -103,6 +102,9 @@ final class Recommendations {
               || !owners.contains(owner)
               || !"TYPE_PREVIEW".equals(text(cursor, "type"))
               || !RecommendationPolicy.validTitle(title)) continue;
+          int count = channelCounts.getOrDefault(owner, 0);
+          if (count >= MAX_CHANNELS_PER_APP) continue;
+          channelCounts.put(owner, count + 1);
           Library.Channel row = new Library.Channel();
           row.numericId = id;
           row.owner = owner;
@@ -139,9 +141,9 @@ final class Recommendations {
                   RecommendationPolicy.rowRank(b.id, order));
           return rank != 0 ? rank : a.id.compareTo(b.id);
         });
+    Map<String, Library.Channel> appRows = new LinkedHashMap<>();
     boolean restricted = false, failed = false;
     for (Library.Channel row : out.recommendationChannels) {
-      if (out.channels.size() >= MAX_VISIBLE_ROWS) break;
       // The browsable flag reflects selection in the system home, not publication or access.
       // Fudge owns its own channel visibility preferences.
       if (hidden.contains(row.id)) continue;
@@ -151,8 +153,19 @@ final class Recommendations {
           failed = true;
           continue;
         }
-        List<Library.Program> candidates = new ArrayList<>();
-        Set<String> seen = new HashSet<>();
+        Library.Channel appRow = appRows.get(row.owner);
+        if (appRow == null) {
+          appRow = new Library.Channel();
+          appRow.id = "app:" + row.owner;
+          appRow.owner = row.owner;
+          appRow.title = row.owner;
+          for (Library.App app : out.allApps)
+            if (row.owner.equals(app.id)) appRow.title = app.label;
+          appRow.numericId = row.numericId;
+          appRow.browsable = row.browsable;
+          appRows.put(row.owner, appRow);
+        }
+        List<Library.Program> candidates = appRow.programs;
         int scanned = 0;
         while (cursor.moveToNext() && scanned++ < MAX_SCAN) {
           check(signal);
@@ -160,10 +173,9 @@ final class Recommendations {
             if (number(cursor, "channel_id", -1) != row.numericId
                 || number(cursor, "browsable", 1) == 0) continue;
             Library.Program p = program(c, cursor, owners, false);
-            if (p == null || !row.owner.equals(p.owner) || !seen.add(contentKey(cursor, p)))
-              continue;
+            if (p == null || !row.owner.equals(p.owner)) continue;
             p.channelId = row.id;
-            candidates.add(p);
+            addUnique(candidates, p);
             // Bound memory while retaining the highest-priority programs encountered.
             if (candidates.size() > limit * 2) {
               sortPrograms(candidates);
@@ -177,8 +189,6 @@ final class Recommendations {
         }
         sortPrograms(candidates);
         if (candidates.size() > limit) candidates.subList(limit, candidates.size()).clear();
-        row.programs.addAll(candidates);
-        if (!row.programs.isEmpty()) out.channels.add(row);
       } catch (OperationCanceledException canceled) {
         throw canceled;
       } catch (SecurityException denied) {
@@ -186,6 +196,13 @@ final class Recommendations {
       } catch (RuntimeException unavailable) {
         failed = true;
       }
+    }
+    for (Library.Channel appRow : appRows.values()) {
+      sortPrograms(appRow.programs);
+      if (appRow.programs.size() > limit)
+        appRow.programs.subList(limit, appRow.programs.size()).clear();
+      if (!appRow.programs.isEmpty()) out.channels.add(appRow);
+      if (out.channels.size() >= MAX_VISIBLE_ROWS) break;
     }
     out.channelCapability =
         !out.channels.isEmpty()
@@ -273,6 +290,8 @@ final class Recommendations {
     Library.Program p = new Library.Program();
     p.id = (watchNext ? "watchnext:" : "preview:") + owner + ":" + id;
     p.owner = owner;
+    p.contentId = text(cursor, "content_id");
+    p.target = link == null ? null : link.getDataString();
     p.title = title.trim();
     p.description = text(cursor, "short_description");
     p.art = RecommendationPolicy.artwork(text(cursor, "poster_art_uri"));
@@ -299,6 +318,30 @@ final class Recommendations {
   private static String contentKey(Cursor cursor, Library.Program program) {
     String link = text(cursor, "intent_uri");
     return link == null || link.trim().isEmpty() ? program.id : program.owner + ":" + link;
+  }
+
+  private static void addUnique(List<Library.Program> programs, Library.Program candidate) {
+    String titleKey =
+        RecommendationPolicy.titleKey(
+            candidate.title, candidate.contentType, candidate.season, candidate.episode);
+    for (int i = 0; i < programs.size(); i++) {
+      Library.Program previous = programs.get(i);
+      boolean sameKind =
+          candidate.contentType == previous.contentType
+              && Objects.equals(candidate.season, previous.season)
+              && Objects.equals(candidate.episode, previous.episode);
+      if ((sameKind
+              && RecommendationPolicy.validTitle(candidate.contentId)
+              && candidate.contentId.equals(previous.contentId))
+          || (sameKind && candidate.target != null && candidate.target.equals(previous.target))
+          || titleKey.equals(
+              RecommendationPolicy.titleKey(
+                  previous.title, previous.contentType, previous.season, previous.episode))) {
+        if (candidate.weight > previous.weight) programs.set(i, candidate);
+        return;
+      }
+    }
+    programs.add(candidate);
   }
 
   static Intent sanitizedLink(String raw, String owner) {

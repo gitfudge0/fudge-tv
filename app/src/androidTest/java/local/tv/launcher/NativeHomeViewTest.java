@@ -168,6 +168,34 @@ public class NativeHomeViewTest {
   }
 
   @Test
+  public void recommendationRowsShowAppLabelsAndOwnerStableIdentity() {
+    main(
+        () -> {
+          Library.Snapshot data = NativeUiTestActivity.fixtureSnapshot();
+          Library.Channel row = data.channels.get(0);
+          row.id = "app:com.apple.atve.sony.appletv";
+          row.owner = "com.apple.atve.sony.appletv";
+          row.title = "Apple TV";
+          activity.home.renderSnapshot(data);
+        });
+    waitMs(150);
+    main(
+        () -> {
+          RecyclerView rows = activity.home.findViewById(R.id.home_rows);
+          NativeRowAdapter adapter = (NativeRowAdapter) rows.getAdapter();
+          int count = 0;
+          for (NativeRowAdapter.Row row : adapter.getCurrentList()) {
+            if ("channel:app:com.apple.atve.sony.appletv".equals(row.id)) {
+              count++;
+              assertEquals("Apple TV", row.title);
+              assertEquals(24, row.cards.size());
+            }
+          }
+          assertEquals(1, count);
+        });
+  }
+
+  @Test
   public void localAppsAppearBeforeRemoteSearchAndErrorsRemainHonest() {
     main(
         () -> {

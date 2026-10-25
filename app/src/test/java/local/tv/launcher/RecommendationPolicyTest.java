@@ -35,6 +35,15 @@ public class RecommendationPolicyTest {
   }
 
   @Test
+  public void titleIdentityNormalizesSpacingCaseAndWidthButPreservesEpisodesAndTypes() {
+    String key = RecommendationPolicy.titleKey("  THE   Show ", 3, "1", "2");
+    assertEquals(key, RecommendationPolicy.titleKey("the show", 3, "1", "2"));
+    assertEquals(key, RecommendationPolicy.titleKey("ＴＨＥ Show", 3, "1", "2"));
+    assertNotEquals(key, RecommendationPolicy.titleKey("the show", 3, "1", "3"));
+    assertNotEquals(key, RecommendationPolicy.titleKey("the show", 0, "1", "2"));
+  }
+
+  @Test
   public void persistedRowOrderIsStableForUnknownChannels() {
     assertEquals(1, RecommendationPolicy.rowRank("b", "a,b,c"));
     assertEquals(Integer.MAX_VALUE, RecommendationPolicy.rowRank("new", "a,b,c"));

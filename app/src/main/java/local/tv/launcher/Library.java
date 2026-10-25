@@ -24,7 +24,7 @@ final class Library {
   }
 
   static final class Program {
-    String id, owner, title, description, art, season, episode, channelId;
+    String id, owner, title, description, art, season, episode, channelId, contentId, target;
     int contentType = -1, aspectRatio = -1;
     long updated;
     Intent launch;
@@ -65,6 +65,12 @@ final class Library {
   }
 
   static Snapshot load(Context c, android.os.CancellationSignal signal) {
+    return load(c, signal, true);
+  }
+
+  // The capability probe reads the actual app UID's inventory without asking publishers to write.
+  static Snapshot load(
+      Context c, android.os.CancellationSignal signal, boolean initializePrograms) {
     Snapshot result = new Snapshot();
     PackageManager pm = c.getPackageManager();
     android.content.SharedPreferences history =
@@ -129,6 +135,7 @@ final class Library {
     result.listingsGranted =
         c.checkSelfPermission("android.permission.READ_TV_LISTINGS")
             == PackageManager.PERMISSION_GRANTED;
+    if (initializePrograms) RecommendationInitialization.initialize(c, result.allApps, signal);
     Recommendations.load(c, result, signal);
     return result;
   }
