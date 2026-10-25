@@ -1,0 +1,22 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <uses-feature android:name="android.software.leanback" android:required="true" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.READ_TV_LISTINGS" />
+    <!-- Ordinary apps may request the usage AppOp through user-controlled special-access settings; no privileged grant is attempted. -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
+    <queries>
+        <intent><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LEANBACK_LAUNCHER"/></intent>
+        <intent><action android:name="android.intent.action.VIEW"/><data android:scheme="content" android:host="android.media.tv"/></intent>
+        <package android:name="com.stremio.one"/><package android:name="com.crunchyroll.crunchyroid"/>
+        <package android:name="com.netflix.ninja"/><package android:name="com.amazon.amazonvideo.livingroom"/>
+        <package android:name="in.startv.hotstar"/><package android:name="com.google.android.youtube.tv"/>
+        <package android:name="com.apple.atve.sony.appletv"/>
+    </queries>
+    <application android:label="Fudge Launcher" android:icon="@drawable/banner" android:banner="@drawable/banner" android:allowBackup="false" android:dataExtractionRules="@xml/data_extraction_rules" android:usesCleartextTraffic="true" android:theme="@style/OpaqueLauncherTheme">
+        <activity android:name=".MainActivity" android:exported="true" android:screenOrientation="landscape" android:launchMode="singleTask">
+            <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LEANBACK_LAUNCHER"/></intent-filter>
+            <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.HOME"/><category android:name="android.intent.category.DEFAULT"/></intent-filter>
+        </activity>
+    </application>
+</manifest>

@@ -1,0 +1,12 @@
+<resources>
+  <style name="OpaqueLauncherTheme" parent="android:style/Theme.Material.NoActionBar.Fullscreen">
+    <item name="android:windowIsTranslucent">false</item>
+    <item name="android:windowIsFloating">false</item>
+    <item name="android:windowSwipeToDismiss">false</item>
+    <item name="android:windowBackground">#080c10</item>
+    <item name="android:fontFamily">sans</item>
+    <item name="android:colorAccent">#ffffff</item>
+    <item name="android:windowActionModeOverlay">true</item>
+    <item name="android:windowLightStatusBar">false</item>
+  </style>
+</resources>

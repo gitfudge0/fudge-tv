@@ -1,0 +1,4 @@
+<resources>
+    <!-- View.setTag(int, Object) requires an app-owned resource key. -->
+    <item name="focus_artwork" type="id" />
+</resources>
