@@ -164,7 +164,7 @@ public class CatalogReliabilityTest {
       assertEquals("live", result.getString("status"));
       assertTrue(result.getBoolean("partial"));
       assertEquals(1, result.getJSONArray("items").length());
-      assertEquals(1, result.getJSONArray("featured").length());
+      assertEquals(0, result.getJSONArray("featured").length());
     }
   }
 

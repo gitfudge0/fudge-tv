@@ -45,7 +45,8 @@ final class Library {
     final List<Program> programs = new ArrayList<>();
     final List<Channel> channels = new ArrayList<>();
     final List<Channel> recommendationChannels = new ArrayList<>();
-    boolean providerAvailable;
+    final List<TvInputs.Entry> inputs = new ArrayList<>();
+    boolean providerAvailable, recommendationsLoading, watchNextLoading;
     String channelCapability = "unavailable", watchNextCapability = "unavailable";
     String channelStatus = "Your apps have not shared preview channels.";
     boolean usageEnabled, listingsGranted;
@@ -71,6 +72,11 @@ final class Library {
   // The capability probe reads the actual app UID's inventory without asking publishers to write.
   static Snapshot load(
       Context c, android.os.CancellationSignal signal, boolean initializePrograms) {
+    Snapshot apps = loadApps(c, signal);
+    return loadRecommendations(c, apps, signal, initializePrograms, ignored -> {});
+  }
+
+  static Snapshot loadApps(Context c, android.os.CancellationSignal signal) {
     Snapshot result = new Snapshot();
     PackageManager pm = c.getPackageManager();
     android.content.SharedPreferences history =
@@ -135,8 +141,55 @@ final class Library {
     result.listingsGranted =
         c.checkSelfPermission("android.permission.READ_TV_LISTINGS")
             == PackageManager.PERMISSION_GRANTED;
-    if (initializePrograms) RecommendationInitialization.initialize(c, result.allApps, signal);
-    Recommendations.load(c, result, signal);
+    result.inputs.addAll(TvInputs.load(c));
+    if (signal != null) signal.throwIfCanceled();
+    return result;
+  }
+
+  static Snapshot copy(Snapshot source) {
+    Snapshot result = new Snapshot();
+    result.apps.addAll(source.apps);
+    result.allApps.addAll(source.allApps);
+    result.inputs.addAll(source.inputs);
+    result.programs.addAll(source.programs);
+    result.channels.addAll(source.channels);
+    result.recommendationChannels.addAll(source.recommendationChannels);
+    result.providerAvailable = source.providerAvailable;
+    result.channelCapability = source.channelCapability;
+    result.watchNextCapability = source.watchNextCapability;
+    result.channelStatus = source.channelStatus;
+    result.programStatus = source.programStatus;
+    result.usageEnabled = source.usageEnabled;
+    result.listingsGranted = source.listingsGranted;
+    result.recommendationsLoading = source.recommendationsLoading;
+    result.watchNextLoading = source.watchNextLoading;
+    return result;
+  }
+
+  static Snapshot loadRecommendations(
+      Context c,
+      Snapshot apps,
+      android.os.CancellationSignal signal,
+      boolean initializePrograms,
+      java.util.function.Consumer<Snapshot> watchReady) {
+    Snapshot result = copy(apps);
+    result.programs.clear();
+    result.channels.clear();
+    result.recommendationChannels.clear();
+    result.recommendationsLoading = result.watchNextLoading = false;
+    boolean[] initialized = {false};
+    Recommendations.load(
+        c,
+        result,
+        signal,
+        () -> {
+          watchReady.accept(copy(result));
+          if (initializePrograms)
+            RecommendationInitialization.initialize(c, result.allApps, signal);
+          initialized[0] = true;
+        });
+    if (initializePrograms && !initialized[0])
+      RecommendationInitialization.initialize(c, result.allApps, signal);
     return result;
   }
 

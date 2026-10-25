@@ -20,17 +20,29 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 /** Only visible vertical rows and their visible cards have native view instances. */
 final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRowAdapter.Holder> {
   static final class Row {
-    final String id, title, subtitle;
+    final String id, title, subtitle, stateKey;
     final NativeCard.Kind kind;
     final List<NativeCard> cards;
 
     Row(String id, String title, String subtitle, NativeCard.Kind kind, List<NativeCard> cards) {
+      this(id, title, subtitle, kind, cards, id);
+    }
+
+    Row(
+        String id,
+        String title,
+        String subtitle,
+        NativeCard.Kind kind,
+        List<NativeCard> cards,
+        String stateKey) {
+      this.stateKey = stateKey;
       this.id = id;
       this.title = title;
       this.subtitle = subtitle;
@@ -45,6 +57,44 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
   private final View header;
   private final RecyclerView.RecycledViewPool sharedPool = new RecyclerView.RecycledViewPool();
   private boolean active = true;
+  private int initialTopInset;
+
+  void setInitialTopInset(int inset) {
+    initialTopInset = inset;
+  }
+
+  private String selectedApp;
+  private List<Row> requestedRows = Collections.emptyList();
+  private BiConsumer<String, NativeCard> focusedCard = (row, card) -> {};
+
+  void setOnFocusedCard(BiConsumer<String, NativeCard> listener) {
+    focusedCard = listener;
+  }
+
+  void setSelectedApp(String id) {
+    selectedApp = id;
+    if (vertical != null)
+      vertical.post(
+          () -> {
+            if (vertical == null) return;
+            for (int i = 0; i < vertical.getChildCount(); i++) {
+              RecyclerView.ViewHolder visible = vertical.getChildViewHolder(vertical.getChildAt(i));
+              if (visible instanceof Holder) {
+                Holder holder = (Holder) visible;
+                if (holder.cards != null)
+                  holder.cards.setContextSelection(
+                      "apps".equals(holder.rowId) ? selectedApp : null);
+              }
+            }
+          });
+  }
+
+  @Override
+  public void submitList(List<Row> rows) {
+    requestedRows = rows == null ? Collections.emptyList() : rows;
+    super.submitList(rows);
+  }
+
   private RecyclerView vertical;
   private long focusGeneration;
   private PendingFocus pendingFocus;
@@ -69,14 +119,20 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
 
   private static final class PendingFocus {
     final long generation;
-    final String rowId, cardId;
+    final String rowId, cardId, stateKey;
     final BooleanSupplier headerFocus;
 
-    PendingFocus(long generation, String rowId, String cardId, BooleanSupplier headerFocus) {
+    PendingFocus(
+        long generation,
+        String rowId,
+        String cardId,
+        String stateKey,
+        BooleanSupplier headerFocus) {
       this.generation = generation;
       this.rowId = rowId;
       this.cardId = cardId;
       this.headerFocus = headerFocus;
+      this.stateKey = stateKey;
     }
   }
 
@@ -121,9 +177,8 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
       if (holder != null) from = holder.getBindingAdapterPosition();
     }
     if (from < 0 && pendingFocus == null) return false;
-    for (int next = from + direction; next >= 0 && next < getItemCount(); next += direction) {
-      Row row = getItem(next);
-      if (row.id.equals("hero")) break;
+    for (int next = from + direction; next >= 0 && next < requestedRows.size(); next += direction) {
+      Row row = requestedRows.get(next);
       if (firstEnabled(row) >= 0) {
         requestRow(row);
         return true;
@@ -134,8 +189,8 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
   }
 
   void focusFirst(BooleanSupplier focusHeader) {
-    for (Row row : getCurrentList())
-      if (!row.id.equals("hero") && firstEnabled(row) >= 0) {
+    for (Row row : requestedRows)
+      if (firstEnabled(row) >= 0) {
         requestRow(row);
         return;
       }
@@ -153,21 +208,14 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
   }
 
   private void requestHeader(BooleanSupplier focusHeader) {
-    if (header == null) {
-      cancelPendingFocus();
-      focusHeader.getAsBoolean();
-      return;
-    }
-    pendingFocus = new PendingFocus(++focusGeneration, "hero", "", focusHeader);
-    vertical.stopScroll();
-    moveToPending(0);
-    applyPendingFocus();
+    cancelPendingFocus();
+    focusHeader.getAsBoolean();
   }
 
   private NativeCard preferredCard(Row row) {
     int position = firstEnabled(row);
     if (position < 0) return null;
-    RowState state = rowStates.get(row.id);
+    RowState state = rowStates.get(row.stateKey);
     if (state != null) {
       int retainedIndex = Math.min(state.focusedIndex, row.cards.size() - 1);
       if (retainedIndex >= 0 && row.cards.get(retainedIndex).enabled) position = retainedIndex;
@@ -185,9 +233,15 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
     NativeCard card = preferredCard(row);
     if (card == null) {
       cancelPendingFocus();
+      if ("recommendations".equals(row.id))
+        for (Row fallback : requestedRows)
+          if ("apps".equals(fallback.id)) {
+            recordPendingRow(fallback);
+            break;
+          }
       return;
     }
-    pendingFocus = new PendingFocus(++focusGeneration, row.id, card.id, null);
+    pendingFocus = new PendingFocus(++focusGeneration, row.id, card.id, row.stateKey, null);
     if (vertical != null) vertical.stopScroll();
   }
 
@@ -201,10 +255,20 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
   private int visibilityDelta(Holder holder) {
     if (holder.row == null) return holder.itemView.getTop() - vertical.getPaddingTop();
     android.graphics.Rect bounds = new android.graphics.Rect();
-    holder.row.getDrawingRect(bounds);
-    vertical.offsetDescendantRectToMyCoords(holder.row, bounds);
-    int top = vertical.getPaddingTop() + ui.px(20),
-        bottom = vertical.getHeight() - vertical.getPaddingBottom() - ui.px(20);
+    holder.itemView.getDrawingRect(bounds);
+    vertical.offsetDescendantRectToMyCoords(holder.itemView, bounds);
+    if (holder.getBindingAdapterPosition() == 0) bounds.top += initialTopInset;
+    // The section's trailing spacing is decorative. At the end of the list it cannot
+    // satisfy another bottom margin; require the heading and actual card host to fit.
+    android.graphics.Rect content = new android.graphics.Rect();
+    holder.row.getDrawingRect(content);
+    vertical.offsetDescendantRectToMyCoords(holder.row, content);
+    bounds.bottom = content.bottom;
+    int top = vertical.getPaddingTop() + (vertical.canScrollVertically(-1) ? ui.px(20) : 0),
+        bottom =
+            vertical.getHeight()
+                - vertical.getPaddingBottom()
+                - (vertical.canScrollVertically(1) ? ui.px(20) : 0);
     if (bounds.top < top) return bounds.top - top;
     if (bounds.bottom > bottom) return bounds.bottom - bottom;
     return 0;
@@ -246,7 +310,7 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
             for (int i = 0; i < vertical.getChildCount(); i++) {
               View child = vertical.getChildAt(i);
               int position = vertical.getChildAdapterPosition(child);
-              if (position >= 0 && !getItem(position).id.equals("hero")) {
+              if (position >= 0) {
                 height += child.getHeight();
                 count++;
               }
@@ -294,6 +358,7 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
         || vertical.getLayoutManager().isSmoothScrolling()
         || vertical.getScrollState() != RecyclerView.SCROLL_STATE_IDLE) return;
     int index = rowIndex(pending.rowId);
+    if (index >= 0 && !getItem(index).stateKey.equals(pending.stateKey)) return;
     if (index < 0) {
       cancelPendingFocus();
       return;
@@ -314,7 +379,8 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
       if (accepted && pendingFocus == pending) cancelPendingFocus();
       return;
     }
-    if (!pending.rowId.equals(holder.rowId)
+    if (!pending.stateKey.equals(holder.stateKey)
+        || !pending.rowId.equals(holder.rowId)
         || holder.row.isComputingLayout()
         || holder.row.hasPendingAdapterUpdates()) return;
     int cardIndex = -1;
@@ -350,6 +416,22 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
   private static final class RowView extends RecyclerView {
     String preferredFocusId;
     Runnable layoutFocus;
+    java.util.function.IntPredicate horizontalStep;
+
+    @Override
+    public boolean dispatchKeyEvent(android.view.KeyEvent event) {
+      if (event.getAction() == android.view.KeyEvent.ACTION_DOWN
+          && hasFocus()
+          && horizontalStep != null) {
+        int step =
+            event.getKeyCode() == android.view.KeyEvent.KEYCODE_DPAD_RIGHT
+                ? 1
+                : event.getKeyCode() == android.view.KeyEvent.KEYCODE_DPAD_LEFT ? -1 : 0;
+        if (getLayoutDirection() == View.LAYOUT_DIRECTION_RTL) step = -step;
+        if (step != 0 && horizontalStep.test(step)) return true;
+      }
+      return super.dispatchKeyEvent(event);
+    }
 
     RowView(android.content.Context context) {
       super(context);
@@ -386,6 +468,7 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
           public boolean areContentsTheSame(@NonNull Row a, @NonNull Row b) {
             return a.title.equals(b.title)
                 && Objects.equals(a.subtitle, b.subtitle)
+                && a.stateKey.equals(b.stateKey)
                 && Objects.equals(a.kind, b.kind)
                 && a.cards.equals(b.cards);
           }
@@ -396,7 +479,8 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
     this.click = click;
     setHasStableIds(true);
     setStateRestorationPolicy(StateRestorationPolicy.PREVENT_WHEN_EMPTY);
-    for (int type = 0; type < 4; type++) sharedPool.setMaxRecycledViews(type, 12);
+    for (int type = 0; type < NativeCard.Kind.values().length; type++)
+      sharedPool.setMaxRecycledViews(type, 12);
   }
 
   @Override
@@ -406,27 +490,22 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
 
   @Override
   public int getItemViewType(int position) {
-    return getItem(position).id.equals("hero") ? 10 : getItem(position).kind.ordinal();
+    return getItem(position).kind.ordinal();
   }
 
   @NonNull
   @Override
   public Holder onCreateViewHolder(@NonNull ViewGroup parent, int type) {
-    if (type == 10) {
-      if (header.getParent() instanceof ViewGroup)
-        ((ViewGroup) header.getParent()).removeView(header);
-      return new Holder(header, null, null, null, null, null);
-    }
     LinearLayout section = new LinearLayout(parent.getContext());
     section.setOrientation(LinearLayout.VERTICAL);
     section.setClipChildren(false);
     section.setClipToPadding(false);
-    section.setPadding(ui.px(109), 0, ui.px(109), ui.px(25));
+    section.setPadding(ui.px(80), 0, ui.px(80), ui.px(28));
     section.setLayoutParams(
         new RecyclerView.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
     TextView title = ui.text("", 31, Color.WHITE);
-    title.setPadding(ui.px(6), 0, 0, ui.px(8));
+    title.setPadding(ui.px(6), 0, 0, ui.px(15));
     section.addView(
         title,
         new LinearLayout.LayoutParams(
@@ -451,6 +530,7 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
     row.setNestedScrollingEnabled(false);
     NativeCard.Kind kind = NativeCard.Kind.values()[type];
     NativeCardAdapter cards = new NativeCardAdapter(ui, images, kind, row, click);
+    row.horizontalStep = cards::moveHorizontal;
     int height = cards.contentHeight() + row.getPaddingTop() + row.getPaddingBottom();
     section.addView(
         row, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height));
@@ -461,13 +541,18 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
     Holder holder = new Holder(section, title, subtitle, empty, cards, row);
     cards.setOnFocusedCard(
         id -> {
-          RowState state = rowStates.get(holder.rowId);
+          RowState state = rowStates.get(holder.stateKey);
           if (state != null) {
             state.focusedId = id;
             for (int i = 0; i < cards.getItemCount(); i++)
               if (cards.getCurrentList().get(i).id.equals(id)) state.focusedIndex = i;
             row.preferredFocusId = id;
           }
+          for (NativeCard card : cards.getCurrentList())
+            if (card.id.equals(id)) {
+              focusedCard.accept(holder.rowId, card);
+              break;
+            }
         });
     return holder;
   }
@@ -476,21 +561,33 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
   public void onBindViewHolder(@NonNull Holder holder, int position) {
     Row data = getItem(position);
     if (holder.cards == null) return;
-    boolean changedRow = !data.id.equals(holder.rowId);
-    boolean hadFocus = !changedRow && holder.row.hasFocus();
+    boolean changedRow = !data.stateKey.equals(holder.stateKey);
+    boolean hadFocus = holder.row.hasFocus();
     saveState(holder);
     holder.rowId = data.id;
+    holder.stateKey = data.stateKey;
     long generation = ++holder.generation;
-    RowState state = rowStates.computeIfAbsent(data.id, id -> new RowState());
+    holder.row.animate().cancel();
+    holder.row.setAlpha(1);
+    holder.row.setTranslationY(0);
+    RowState state = rowStates.computeIfAbsent(data.stateKey, id -> new RowState());
     holder.row.preferredFocusId = state.focusedId;
+    holder.itemView.setPadding(
+        ui.px(80), position == 0 ? initialTopInset : 0, ui.px(80), ui.px(28));
     holder.title.setText(data.title);
     holder.subtitle.setText(data.subtitle);
     holder.subtitle.setVisibility(
         data.subtitle == null || data.subtitle.isEmpty() ? View.GONE : View.VISIBLE);
     holder.cards.setInstant(!active);
+    holder.cards.setContextSelection("apps".equals(data.id) ? selectedApp : null);
     // Preserve this row's selection through its asynchronous card diff, unless newer input
     // already targets another row. The same generation/lifecycle guards own both paths.
-    if (hadFocus && pendingFocus == null) recordPendingRow(data);
+    if (hadFocus && pendingFocus == null) {
+      if (changedRow && "recommendations".equals(data.id)) {
+        for (Row fallback : requestedRows)
+          if ("apps".equals(fallback.id)) recordPendingRow(fallback);
+      } else recordPendingRow(data);
+    }
     holder.cards.submitList(
         data.cards,
         () -> {
@@ -500,6 +597,15 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
           if (changedRow) {
             if (state.layout == null) layout.scrollToPositionWithOffset(0, 0);
             else layout.onRestoreInstanceState(state.layout);
+          }
+          if (changedRow
+              && "recommendations".equals(data.id)
+              && active
+              && !NativeUi.reducedMotion()
+              && !data.cards.isEmpty()) {
+            holder.row.setAlpha(0);
+            holder.row.setTranslationY(ui.px(6));
+            holder.row.animate().alpha(1).translationY(0).setDuration(140).start();
           }
         });
     boolean explained = data.subtitle != null && !data.subtitle.isEmpty();
@@ -513,7 +619,7 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
 
   private void saveState(Holder holder) {
     if (holder.row == null || holder.rowId == null) return;
-    RowState state = rowStates.get(holder.rowId);
+    RowState state = rowStates.get(holder.stateKey);
     if (state != null && holder.row.getLayoutManager() != null)
       state.layout = holder.row.getLayoutManager().onSaveInstanceState();
   }
@@ -529,6 +635,9 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
     holder.generation++;
     holder.rowId = null;
     if (holder.row != null) {
+      holder.row.animate().cancel();
+      holder.row.setAlpha(1);
+      holder.row.setTranslationY(0);
       holder.row.preferredFocusId = null;
     }
   }
@@ -542,17 +651,22 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
       vertical.post(this::applyPendingFocus);
     }
     Set<String> retained = new HashSet<>();
-    for (Row row : current) retained.add(row.id);
+    for (Row row : requestedRows) retained.add(row.stateKey);
+    // Retain per-app recommendation positions while switching the contextual rail.
+    for (Row row : requestedRows)
+      if ("apps".equals(row.id))
+        for (NativeCard card : row.cards)
+          if (card.app != null) retained.add("recommendations:" + card.app.id);
     rowStates.keySet().retainAll(retained);
     if (pendingFocus != null) {
-      int index = rowIndex(pendingFocus.rowId);
-      if (index < 0) cancelPendingFocus();
+      Row desired = null;
+      for (Row row : requestedRows) if (row.id.equals(pendingFocus.rowId)) desired = row;
+      if (desired == null) cancelPendingFocus();
       else if (pendingFocus.headerFocus == null) {
-        Row row = getItem(index);
         boolean enabled = false;
-        for (NativeCard card : row.cards)
+        for (NativeCard card : desired.cards)
           if (card.enabled && card.id.equals(pendingFocus.cardId)) enabled = true;
-        if (!enabled) recordPendingRow(row);
+        if (!enabled || !desired.stateKey.equals(pendingFocus.stateKey)) recordPendingRow(desired);
       }
     }
   }
@@ -566,7 +680,7 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
     final TextView title, subtitle, empty;
     final NativeCardAdapter cards;
     final RowView row;
-    String rowId;
+    String rowId, stateKey;
     long generation;
 
     Holder(

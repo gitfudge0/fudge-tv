@@ -148,9 +148,9 @@ public class NativeRenderingTest {
           activity.home.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
           RecyclerView vertical = activity.home.findViewById(R.id.home_rows);
           NativeRowAdapter rows = (NativeRowAdapter) vertical.getAdapter();
-          assertEquals("channel:fixture", rows.getCurrentList().get(3).id);
-          assertEquals(NativeCard.Kind.POSTER, rows.getCurrentList().get(3).kind);
-          assertEquals(24, rows.getCurrentList().get(3).cards.size());
+          assertEquals("recommendations", rows.getCurrentList().get(2).id);
+          assertEquals(NativeCard.Kind.RECOMMENDATION, rows.getCurrentList().get(2).kind);
+          assertEquals(24, rows.getCurrentList().get(2).cards.size());
         });
     providerRow = NativeUiTestDriver.reachProviderRow(instrumentation, activity);
     SystemClock.sleep(400);

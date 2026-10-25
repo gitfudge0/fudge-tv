@@ -130,9 +130,8 @@ public final class CatalogClient implements AutoCloseable {
     List<Future<JSONArray>> pending = new ArrayList<>();
     List<JSONArray> results = new ArrayList<>();
     int successes = 0;
-    int featuredSuccesses = 0;
     try {
-      for (String catalog : new String[] {"top", "imdbRating"}) {
+      for (String catalog : new String[] {"top"}) {
         for (String type : new String[] {"movie", "series"}) {
           checkActive();
           pending.add(sources.submit(() -> catalog(type, catalog, "")));
@@ -142,8 +141,7 @@ public final class CatalogClient implements AutoCloseable {
         checkActive();
         try {
           results.add(pending.get(index).get());
-          if (index < 2) successes++;
-          else featuredSuccesses++;
+          successes++;
         } catch (InterruptedException interrupted) {
           Thread.currentThread().interrupt();
           throw new InterruptedIOException();
@@ -155,10 +153,10 @@ public final class CatalogClient implements AutoCloseable {
       if (successes == 0 || results.get(0).length() + results.get(1).length() == 0) {
         throw new IOException("Catalog unavailable");
       }
-      boolean partial = successes < 2 || featuredSuccesses < 2;
+      boolean partial = successes < 2;
       return envelope(
               interleave(results.get(0), results.get(1), 24),
-              interleave(results.get(2), results.get(3), 4),
+              new JSONArray(),
               "live",
               partial ? "Some catalog results are unavailable" : "")
           .put("partial", partial);

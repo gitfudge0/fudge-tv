@@ -4,12 +4,9 @@
     <item name="search_rows" type="id" />
     <item name="search_input" type="id" />
     <item name="search_status" type="id" />
-    <item name="hero_title" type="id" />
-    <item name="hero_description" type="id" />
-    <item name="hero_open" type="id" />
-    <item name="hero_more" type="id" />
-    <item name="feature_selectors" type="id" />
     <item name="nav_home" type="id" />
     <item name="nav_search" type="id" />
     <item name="nav_settings" type="id" />
+    <item name="home_wallpaper" type="id" />
+    <item name="home_header" type="id" />
 </resources>

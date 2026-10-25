@@ -41,7 +41,7 @@ final class NativeNavIcon extends Drawable {
   @Override
   public void draw(Canvas canvas) {
     canvas.save();
-    float size = Math.min(getBounds().width(), getBounds().height()) * .43f;
+    float size = Math.min(getBounds().width(), getBounds().height()) * .92f;
     canvas.translate(getBounds().centerX() - size / 2, getBounds().centerY() - size / 2);
     canvas.scale(size / 24, size / 24);
     Path p = new Path();
@@ -60,6 +60,10 @@ final class NativeNavIcon extends Drawable {
     } else if (kind == 1) {
       canvas.drawCircle(10.5f, 10.5f, 6.5f, paint);
       canvas.drawLine(16, 16, 21, 21, paint);
+    } else if (kind == 3) {
+      canvas.drawRoundRect(2, 3, 22, 17, 2, 2, paint);
+      canvas.drawLine(12, 17, 12, 21, paint);
+      canvas.drawLine(8, 21, 16, 21, paint);
     } else {
       for (int i = 0; i < 24; i++) {
         double angle = Math.PI * i / 12 - Math.PI / 2;

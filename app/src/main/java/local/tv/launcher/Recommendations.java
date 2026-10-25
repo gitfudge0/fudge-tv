@@ -22,6 +22,11 @@ final class Recommendations {
   }
 
   static void load(Context context, Library.Snapshot out, CancellationSignal signal) {
+    load(context, out, signal, () -> {});
+  }
+
+  static void load(
+      Context context, Library.Snapshot out, CancellationSignal signal, Runnable watchReady) {
     load(
         context,
         out,
@@ -35,14 +40,26 @@ final class Recommendations {
           public Cursor query(Uri uri, CancellationSignal cancellation) {
             return context.getContentResolver().query(uri, null, null, null, null, cancellation);
           }
-        });
+        },
+        watchReady);
   }
 
   static void load(
       Context context, Library.Snapshot out, CancellationSignal signal, Source source) {
+    load(context, out, signal, source, () -> {});
+  }
+
+  static void load(
+      Context context,
+      Library.Snapshot out,
+      CancellationSignal signal,
+      Source source,
+      Runnable watchReady) {
     SharedPreferences prefs = context.getSharedPreferences("recommendations", Context.MODE_PRIVATE);
     if (!prefs.getBoolean("enabled", true)) {
       out.channelCapability = out.watchNextCapability = "disabled";
+      out.channelStatus = "Recommendations are turned off.";
+      out.programStatus = "Continue Watching is turned off.";
       return;
     }
     try {
@@ -66,10 +83,11 @@ final class Recommendations {
     for (Library.App app : out.allApps)
       if (RecommendationPolicy.eligibleOwner(app.id)) owners.add(app.id);
     int limit = RecommendationPolicy.limit(prefs.getInt("maxItems", 20));
-    readChannels(context, out, signal, owners, limit, prefs, source);
     if (prefs.getBoolean("watchNext", true))
       readWatchNext(context, out, signal, owners, limit, source);
     else out.watchNextCapability = "disabled";
+    watchReady.run();
+    readChannels(context, out, signal, owners, limit, prefs, source);
   }
 
   private static Cursor query(Source source, Uri uri, CancellationSignal signal) {

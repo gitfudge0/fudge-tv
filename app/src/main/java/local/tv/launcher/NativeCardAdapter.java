@@ -25,6 +25,13 @@ final class NativeCardAdapter extends ListAdapter<NativeCard, NativeCardAdapter.
   private final NativeCard.Kind kind;
   private final RecyclerView row;
   private String selectedId;
+  private String contextSelection;
+
+  void setContextSelection(String id) {
+    contextSelection = id;
+    updateMotion();
+  }
+
   private int selectedPosition = -1;
   private boolean instant;
   private Consumer<String> focusedCard = id -> {};
@@ -70,34 +77,46 @@ final class NativeCardAdapter extends ListAdapter<NativeCard, NativeCardAdapter.
     return kind.ordinal();
   }
 
+  private boolean classic() {
+    return kind == NativeCard.Kind.APP || kind == NativeCard.Kind.POSTER;
+  }
+
   int width() {
-    return ui.px(kind == NativeCard.Kind.APP ? 220 : kind == NativeCard.Kind.WATCH ? 300 : 200);
+    return ui.px(
+        kind == NativeCard.Kind.APP
+            ? 220
+            : kind == NativeCard.Kind.POSTER ? 200 : kind == NativeCard.Kind.INPUT ? 300 : 420);
   }
 
   int artHeight() {
-    return ui.px(kind == NativeCard.Kind.APP ? 124 : kind == NativeCard.Kind.WATCH ? 169 : 300);
+    return ui.px(
+        kind == NativeCard.Kind.APP
+            ? 124
+            : kind == NativeCard.Kind.POSTER ? 300 : kind == NativeCard.Kind.INPUT ? 105 : 236);
   }
 
   float focusScale() {
     return kind == NativeCard.Kind.APP
         ? 290f / 220
-        : kind == NativeCard.Kind.WATCH ? 380f / 300 : 1.25f;
+        : kind == NativeCard.Kind.POSTER ? 1.25f : 1.025f;
   }
 
   int reservedArtHeight() {
-    return Math.round(artHeight() * focusScale());
-  }
-
-  private int subtitleTop() {
-    return reservedArtHeight() + ui.px(50);
-  }
-
-  private int subtitleHeight() {
-    return ui.px(kind == NativeCard.Kind.WATCH ? 50 : 25);
+    return classic() ? Math.round(artHeight() * focusScale()) : artHeight() + ui.px(8);
   }
 
   int contentHeight() {
-    return subtitleTop() + subtitleHeight() + ui.px(8);
+    return classic() ? reservedArtHeight() + ui.px(50 + 25 + 8) : reservedArtHeight() + ui.px(15);
+  }
+
+  private int cardStride() {
+    return width() + ui.px(classic() ? 20 : 22);
+  }
+
+  private android.graphics.drawable.GradientDrawable inputSurface() {
+    android.graphics.drawable.GradientDrawable surface = ui.surface(0xff21252e, 12);
+    surface.setStroke(ui.px(1), 0x16ffffff);
+    return surface;
   }
 
   @NonNull
@@ -109,55 +128,105 @@ final class NativeCardAdapter extends ListAdapter<NativeCard, NativeCardAdapter.
     card.setClickable(true);
     card.setClipChildren(false);
     card.setClipToPadding(false);
-    RecyclerView.LayoutParams layout =
-        new RecyclerView.LayoutParams(width() + ui.px(20), ViewGroup.LayoutParams.MATCH_PARENT);
-    card.setLayoutParams(layout);
+    card.setLayoutParams(new RecyclerView.LayoutParams(cardStride(), -1));
     ImageView art = new ImageView(parent.getContext());
     art.setScaleType(
         kind == NativeCard.Kind.APP
             ? ImageView.ScaleType.FIT_CENTER
             : ImageView.ScaleType.CENTER_CROP);
     FrameLayout artwork = new FrameLayout(parent.getContext());
-    artwork.setBackground(ui.surface(0xff17191d, 11));
+    artwork.setBackground(
+        kind == NativeCard.Kind.INPUT
+            ? inputSurface()
+            : ui.surface(classic() ? 0xff17191d : 0xff20242a, classic() ? 11 : 12));
     artwork.setClipToOutline(true);
-    artwork.addView(art, new FrameLayout.LayoutParams(-1, -1));
+    FrameLayout.LayoutParams imageLayout = new FrameLayout.LayoutParams(-1, -1);
+    if (kind == NativeCard.Kind.INPUT) {
+      imageLayout = new FrameLayout.LayoutParams(ui.px(36), ui.px(36));
+      imageLayout.leftMargin = ui.px(18);
+      imageLayout.gravity = Gravity.CENTER_VERTICAL;
+      art.setScaleType(ImageView.ScaleType.FIT_CENTER);
+    }
+    artwork.addView(art, imageLayout);
     FrameLayout.LayoutParams artLayout = new FrameLayout.LayoutParams(width(), artHeight());
-    artLayout.topMargin = reservedArtHeight() - artHeight();
+    artLayout.topMargin = classic() ? reservedArtHeight() - artHeight() : ui.px(8);
     card.addView(artwork, artLayout);
-    artwork.setPivotX(0);
-    artwork.setPivotY(artHeight());
-    TextView title = ui.text("", kind == NativeCard.Kind.APP ? 21 : 22, Color.WHITE);
+    artwork.setPivotX(classic() ? 0 : width() / 2f);
+    artwork.setPivotY(classic() ? artHeight() : artHeight() / 2f);
+    if (!classic() && kind != NativeCard.Kind.INPUT) {
+      View shade = new View(parent.getContext());
+      shade.setBackground(
+          new android.graphics.drawable.GradientDrawable(
+              android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+              new int[] {0, 0x15000000, 0xcc000000}));
+      artwork.addView(shade, new FrameLayout.LayoutParams(-1, -1));
+    }
+    TextView title =
+        ui.text(
+            "",
+            kind == NativeCard.Kind.APP ? 21 : classic() || kind == NativeCard.Kind.INPUT ? 22 : 25,
+            Color.WHITE);
+    if (!classic() && kind != NativeCard.Kind.INPUT)
+      title.setTypeface(ui.font, android.graphics.Typeface.BOLD);
     title.setSingleLine(true);
     title.setEllipsize(TextUtils.TruncateAt.END);
-    FrameLayout.LayoutParams titleLayout = new FrameLayout.LayoutParams(width(), ui.px(28));
-    titleLayout.topMargin = reservedArtHeight() + ui.px(17);
-    card.addView(title, titleLayout);
-    TextView subtitle = ui.text("", 18, NativeUi.MUTED);
-    subtitle.setMaxLines(kind == NativeCard.Kind.WATCH ? 2 : 1);
+    FrameLayout.LayoutParams titleLayout;
+    if (classic()) {
+      titleLayout = new FrameLayout.LayoutParams(width(), ui.px(28));
+      titleLayout.topMargin = reservedArtHeight() + ui.px(17);
+      card.addView(title, titleLayout);
+    } else if (kind == NativeCard.Kind.INPUT) {
+      titleLayout = new FrameLayout.LayoutParams(width() - ui.px(88), -1, Gravity.START);
+      titleLayout.leftMargin = ui.px(70);
+      title.setGravity(Gravity.CENTER_VERTICAL);
+      artwork.addView(title, titleLayout);
+    } else {
+      titleLayout =
+          new FrameLayout.LayoutParams(
+              width() - ui.px(36), ui.px(33), Gravity.BOTTOM | Gravity.START);
+      titleLayout.leftMargin = ui.px(18);
+      titleLayout.bottomMargin = ui.px(48);
+      artwork.addView(title, titleLayout);
+    }
+    TextView subtitle = ui.text("", 18, classic() ? NativeUi.MUTED : 0xffdedee1);
+    subtitle.setSingleLine(true);
     subtitle.setEllipsize(TextUtils.TruncateAt.END);
-    FrameLayout.LayoutParams subtitleLayout =
-        new FrameLayout.LayoutParams(width(), subtitleHeight());
-    subtitleLayout.topMargin = subtitleTop();
-    card.addView(subtitle, subtitleLayout);
+    FrameLayout.LayoutParams subtitleLayout;
+    if (classic()) {
+      subtitleLayout = new FrameLayout.LayoutParams(width(), ui.px(25));
+      subtitleLayout.topMargin = reservedArtHeight() + ui.px(50);
+      card.addView(subtitle, subtitleLayout);
+    } else {
+      subtitleLayout =
+          new FrameLayout.LayoutParams(
+              width() - ui.px(36), ui.px(27), Gravity.BOTTOM | Gravity.START);
+      subtitleLayout.leftMargin = ui.px(18);
+      subtitleLayout.bottomMargin = ui.px(18);
+      artwork.addView(subtitle, subtitleLayout);
+    }
     ProgressBar progress =
         new ProgressBar(parent.getContext(), null, android.R.attr.progressBarStyleHorizontal);
     progress.setMax(100);
-    progress.setProgressTintList(android.content.res.ColorStateList.valueOf(Color.WHITE));
+    progress.setProgressTintList(android.content.res.ColorStateList.valueOf(0xffe5c89f));
     FrameLayout.LayoutParams progressLayout =
-        new FrameLayout.LayoutParams(width() - ui.px(24), ui.px(5));
-    progressLayout.leftMargin = ui.px(12);
-    progressLayout.bottomMargin = ui.px(12);
-    progressLayout.gravity = Gravity.BOTTOM;
+        new FrameLayout.LayoutParams(-1, ui.px(5), Gravity.BOTTOM);
     artwork.addView(progress, progressLayout);
-    TextView tag = ui.text("", 17, Color.WHITE);
+    TextView tag = ui.text("", 15, Color.WHITE);
     tag.setBackground(ui.surface(0x77000000, 4));
     tag.setPadding(ui.px(6), ui.px(4), ui.px(6), ui.px(4));
     FrameLayout.LayoutParams tagLayout =
-        new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.START);
-    tagLayout.leftMargin = ui.px(12);
-    tagLayout.bottomMargin = ui.px(11);
+        new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
+    tagLayout.rightMargin = ui.px(12);
+    tagLayout.topMargin = ui.px(12);
     artwork.addView(tag, tagLayout);
-    return new Holder(card, artwork, art, title, subtitle, tag, progress);
+    View marker = new View(parent.getContext());
+    marker.setBackground(ui.surface(0xffdbbb91, 2));
+    FrameLayout.LayoutParams markerLayout = new FrameLayout.LayoutParams(ui.px(38), ui.px(4));
+    markerLayout.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+    markerLayout.bottomMargin = ui.px(2);
+    card.addView(marker, markerLayout);
+    marker.setVisibility(View.GONE);
+    return new Holder(card, artwork, art, title, subtitle, tag, progress, marker);
   }
 
   @Override
@@ -175,9 +244,12 @@ final class NativeCardAdapter extends ListAdapter<NativeCard, NativeCardAdapter.
               ? R.string.media_series
               : R.string.media_film);
     holder.title.setText(card.title);
+    holder.title.setVisibility(View.VISIBLE);
     holder.subtitle.setText(card.subtitle);
     holder.subtitle.setVisibility(
-        card.subtitle == null || card.subtitle.isEmpty() ? View.INVISIBLE : View.VISIBLE);
+        kind == NativeCard.Kind.INPUT
+            ? View.GONE
+            : card.subtitle == null || card.subtitle.isEmpty() ? View.INVISIBLE : View.VISIBLE);
     holder.itemView.setEnabled(card.enabled);
     holder.itemView.setFocusable(card.enabled);
     holder.itemView.setAlpha(card.enabled ? 1f : .45f);
@@ -189,7 +261,16 @@ final class NativeCardAdapter extends ListAdapter<NativeCard, NativeCardAdapter.
     holder.progress.setVisibility(card.progress < 0 ? View.GONE : View.VISIBLE);
     holder.progress.setProgress(Math.max(0, card.progress));
     if (card.app != null) images.showApp(holder.art, card.app, false);
-    else images.load(holder.art, card.art, Math.round(width() * focusScale()), reservedArtHeight());
+    else if (card.kind == NativeCard.Kind.INPUT) {
+      images.clear(holder.art);
+      holder.art.setImageDrawable(
+          new NativeNavIcon(
+              card.id.equals("control:system-settings")
+                  ? 2
+                  : card.id.equals("control:system-home") ? 0 : 3));
+      holder.artwork.setBackground(inputSurface());
+    } else
+      images.load(holder.art, card.art, Math.round(width() * focusScale()), reservedArtHeight());
     holder.itemView.setOnClickListener(v -> click.accept(holder.card));
     holder.itemView.setOnFocusChangeListener(
         (v, focused) -> {
@@ -205,6 +286,8 @@ final class NativeCardAdapter extends ListAdapter<NativeCard, NativeCardAdapter.
                   centerRow();
                 });
           } else {
+            holder.artwork.setForeground(null);
+            holder.artwork.setElevation(0);
             NativeUi.move(holder.artwork, 0, 1f, instant);
             if (!row.hasFocus()) {
               selectedId = null;
@@ -214,6 +297,35 @@ final class NativeCardAdapter extends ListAdapter<NativeCard, NativeCardAdapter.
           }
         });
     applyMotion(holder, true);
+  }
+
+  boolean moveHorizontal(int step) {
+    View focus = row.findFocus();
+    RecyclerView.ViewHolder current = focus == null ? null : row.findContainingViewHolder(focus);
+    if (!(current instanceof Holder)) return false;
+    int from = current.getBindingAdapterPosition();
+    if (from < 0) return true;
+    int next = from + step;
+    while (next >= 0 && next < getItemCount() && !getItem(next).enabled) next += step;
+    if (next < 0 || next >= getItemCount()) return true;
+    String targetId = getItem(next).id;
+    row.stopScroll();
+    RecyclerView.ViewHolder target = row.findViewHolderForItemId(Policy.stableId(targetId));
+    if (target == null) {
+      // Fill only enough native layout space to attach the next enabled neighbor. The
+      // usual reveal animation then brings that exact card fully into view.
+      int physicalStep = row.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL ? -step : step;
+      int attachDistance =
+          physicalStep > 0
+              ? Math.max(
+                  1, current.itemView.getRight() - row.getWidth() + row.getPaddingRight() + 1)
+              : Math.max(1, row.getPaddingLeft() - current.itemView.getLeft() + 1);
+      attachDistance += (Math.abs(next - from) - 1) * cardStride();
+      row.scrollBy(physicalStep * attachDistance, 0);
+      target = row.findViewHolderForItemId(Policy.stableId(targetId));
+    }
+    if (target != null) target.itemView.requestFocus();
+    return true;
   }
 
   private void centerRow() {
@@ -272,6 +384,12 @@ final class NativeCardAdapter extends ListAdapter<NativeCard, NativeCardAdapter.
     NativeUi.move(holder.itemView, shift, 1, immediate || instant);
     NativeUi.move(holder.artwork, 0, focused ? focusScale() : 1, immediate || instant);
     holder.artwork.setElevation(focused ? ui.px(18) : 0);
+    boolean selected = holder.card != null && holder.card.id.equals(contextSelection);
+    holder.itemView.setSelected(selected);
+    holder.itemView.setStateDescription(selected ? "Recommendations shown below" : null);
+    holder.title.setTextColor(selected ? 0xffe4d7bf : Color.WHITE);
+    holder.artwork.setForeground(focused && !classic() ? ui.focusOutline() : null);
+    holder.marker.setVisibility(selected ? View.VISIBLE : View.GONE);
   }
 
   void setInstant(boolean instant) {
@@ -305,6 +423,7 @@ final class NativeCardAdapter extends ListAdapter<NativeCard, NativeCardAdapter.
     final ImageView art;
     final TextView title, subtitle, tag;
     final ProgressBar progress;
+    final View marker;
     NativeCard card;
 
     Holder(
@@ -314,7 +433,8 @@ final class NativeCardAdapter extends ListAdapter<NativeCard, NativeCardAdapter.
         TextView title,
         TextView subtitle,
         TextView tag,
-        ProgressBar progress) {
+        ProgressBar progress,
+        View marker) {
       super(view);
       this.artwork = artwork;
       this.art = art;
@@ -322,6 +442,7 @@ final class NativeCardAdapter extends ListAdapter<NativeCard, NativeCardAdapter.
       this.subtitle = subtitle;
       this.tag = tag;
       this.progress = progress;
+      this.marker = marker;
     }
   }
 }

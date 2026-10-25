@@ -17,9 +17,8 @@ final class NativeUiTestDriver {
 
   static RecyclerView reachProviderRow(
       Instrumentation instrumentation, NativeUiTestActivity activity) {
-    awaitFocus(instrumentation, activity, "gallery");
-    for (String expected :
-        new String[] {"selector", "watch:0", "app:fixture.app0", "published:0"}) {
+    awaitFocus(instrumentation, activity, "watch:0");
+    for (String expected : new String[] {"app:fixture.app0", "published:0"}) {
       instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
       instrumentation.waitForIdleSync();
       awaitFocus(instrumentation, activity, expected);
@@ -71,7 +70,7 @@ final class NativeUiTestDriver {
             View section = vertical.getChildAt(i);
             int position = vertical.getChildAdapterPosition(section);
             detail.append("\nrow:").append(position).append(' ').append(bounds(section));
-            if (position <= 0 || !(section instanceof android.view.ViewGroup)) continue;
+            if (position < 0 || !(section instanceof android.view.ViewGroup)) continue;
             RecyclerView row = (RecyclerView) ((android.view.ViewGroup) section).getChildAt(2);
             detail
                 .append(" nestedFocus=")
@@ -125,11 +124,10 @@ final class NativeUiTestDriver {
         + visible;
   }
 
-  private static String identity(View focused) {
+  static String identity(View focused) {
     if (focused == null) return "none";
-    if (focused.getId() == R.id.hero_open) return "gallery";
+    if (focused.getId() == R.id.nav_home) return "home";
     if (focused.getId() == R.id.search_input) return "searchInput";
-    if (focused instanceof NativeCarouselDot) return "selector";
     for (ViewParent parent = focused.getParent(); parent != null; parent = parent.getParent()) {
       if (parent instanceof RecyclerView) {
         RecyclerView.ViewHolder holder = ((RecyclerView) parent).findContainingViewHolder(focused);

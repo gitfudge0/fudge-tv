@@ -41,7 +41,7 @@ public class CatalogConcurrencyTest {
 
   @Test
   public void homeStartsAllIndependentSourcesBeforeAnyFinishes() throws Exception {
-    CountDownLatch started = new CountDownLatch(4);
+    CountDownLatch started = new CountDownLatch(2);
     CountDownLatch release = new CountDownLatch(1);
     AtomicInteger calls = new AtomicInteger();
     ExecutorService caller = Executors.newSingleThreadExecutor();
@@ -65,8 +65,8 @@ public class CatalogConcurrencyTest {
       assertEquals("live", result.getString("status"));
       assertFalse(result.getBoolean("partial"));
       assertEquals(2, result.getJSONArray("items").length());
-      assertEquals(2, result.getJSONArray("featured").length());
-      assertEquals(4, calls.get());
+      assertEquals(0, result.getJSONArray("featured").length());
+      assertEquals(2, calls.get());
     } finally {
       release.countDown();
       caller.shutdownNow();
@@ -184,7 +184,7 @@ public class CatalogConcurrencyTest {
       assertTrue(file.setLastModified(System.currentTimeMillis() - TimeUnit.HOURS.toMillis(2)));
     }
     AtomicInteger calls = new AtomicInteger();
-    CountDownLatch started = new CountDownLatch(4);
+    CountDownLatch started = new CountDownLatch(2);
     CountDownLatch release = new CountDownLatch(1);
     ExecutorService caller = Executors.newSingleThreadExecutor();
     try (CatalogClient client =
@@ -211,7 +211,7 @@ public class CatalogConcurrencyTest {
       }
       assertEquals("live", refreshed.get(2, TimeUnit.SECONDS).getString("status"));
       assertFalse(client.cachedHome().getBoolean("stale"));
-      assertEquals(4, calls.get());
+      assertEquals(2, calls.get());
     } finally {
       release.countDown();
       caller.shutdownNow();
@@ -220,8 +220,8 @@ public class CatalogConcurrencyTest {
 
   @Test
   public void cancelingHomeInterruptsEverySourceAndAllowsReplacement() throws Exception {
-    CountDownLatch started = new CountDownLatch(4);
-    CountDownLatch stopped = new CountDownLatch(4);
+    CountDownLatch started = new CountDownLatch(2);
+    CountDownLatch stopped = new CountDownLatch(2);
     AtomicBoolean blocking = new AtomicBoolean(true);
     AtomicInteger calls = new AtomicInteger();
     CatalogClient.Cache disk = cache("cancellation");
@@ -250,7 +250,7 @@ public class CatalogConcurrencyTest {
       assertEquals(0, disk.dir.listFiles().length);
       blocking.set(false);
       assertEquals("live", client.home().getString("status"));
-      assertEquals(8, calls.get());
+      assertEquals(4, calls.get());
       assertNotNull(client.cachedHome());
     }
   }
@@ -282,7 +282,7 @@ public class CatalogConcurrencyTest {
 
   @Test
   public void shutdownCancelsRunningHomeAndPreventsNewNetworkWork() throws Exception {
-    CountDownLatch started = new CountDownLatch(4);
+    CountDownLatch started = new CountDownLatch(2);
     CatalogClient client =
         new CatalogClient(
             cache("close"),

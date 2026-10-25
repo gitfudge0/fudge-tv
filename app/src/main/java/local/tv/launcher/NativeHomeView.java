@@ -3,12 +3,10 @@ package local.tv.launcher;
 import android.app.Dialog;
 import android.content.Context;
 import android.graphics.Color;
-import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.Editable;
-import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -58,6 +56,12 @@ final class NativeHomeView extends FrameLayout {
     void onAllApps();
 
     void onRefresh();
+
+    void onInput(String id);
+
+    void onSystemHome();
+
+    void onSystemSettings();
   }
 
   private final NativeUi ui;
@@ -67,15 +71,13 @@ final class NativeHomeView extends FrameLayout {
   private final ImageView backdrop;
   private final RecyclerView homeRows, searchRows;
   private final NativeRowAdapter homeAdapter, searchAdapter;
-  private final LinearLayout hero, nav, searchPage, actions, indicators;
-  private final TextView heroTitle, heroMeta, heroDescription, searchStatus;
-  private final Button openTitle, moreInfo, homeButton, searchButton, settingsButton;
+  private final LinearLayout nav, searchPage;
+  private final TextView searchStatus;
+  private final Button homeButton, searchButton, settingsButton;
   private final EditText searchInput;
   private Library.Snapshot snapshot = new Library.Snapshot();
-  private List<JSONObject> catalog = Collections.emptyList(),
-      featured = Collections.emptyList(),
-      searchItems = Collections.emptyList();
-  private int heroIndex;
+  private List<JSONObject> catalog = Collections.emptyList(), searchItems = Collections.emptyList();
+  private String selectedAppId;
   private String catalogMessage = "The catalog is loading. Your streaming apps remain available.";
   private boolean appSearchPending;
   private List<Library.Program> appSearchItems = Collections.emptyList();
@@ -86,29 +88,6 @@ final class NativeHomeView extends FrameLayout {
   private View dialogReturnFocus;
   private JSONObject detailItem;
   private boolean startupFocusPending = true;
-  private long carouselStarted;
-  private final Runnable progressTick =
-      new Runnable() {
-        @Override
-        public void run() {
-          if (!carouselEligible()) return;
-          View dot = indicators.getChildAt(heroIndex);
-          if (dot instanceof NativeCarouselDot)
-            ((NativeCarouselDot) dot)
-                .setProgress((android.os.SystemClock.uptimeMillis() - carouselStarted) / 8000f);
-          main.postDelayed(this, 100);
-        }
-      };
-  private final Runnable carousel =
-      new Runnable() {
-        @Override
-        public void run() {
-          if (!carouselEligible()) return;
-          heroIndex = (heroIndex + 1) % featured.size();
-          renderHero();
-          scheduleCarousel();
-        }
-      };
   private final Runnable submitSearch = this::submitPendingSearch;
 
   private void submitPendingSearch() {
@@ -127,82 +106,55 @@ final class NativeHomeView extends FrameLayout {
     setBackgroundColor(NativeUi.BACKGROUND);
     setClipChildren(true);
     setClipToPadding(false);
-    backdrop = new ImageView(context);
-    backdrop.setScaleType(ImageView.ScaleType.CENTER_CROP);
+    backdrop =
+        new ImageView(context) {
+          @Override
+          protected void onSizeChanged(int width, int height, int oldWidth, int oldHeight) {
+            super.onSizeChanged(width, height, oldWidth, oldHeight);
+            if (getDrawable() == null) return;
+            float scale = width / (float) getDrawable().getIntrinsicWidth();
+            android.graphics.Matrix frame = new android.graphics.Matrix();
+            frame.setScale(scale, scale);
+            // Keep the mountain range in the visible scenic band; discard excess sky.
+            frame.postTranslate(
+                0, height * .24f - getDrawable().getIntrinsicHeight() * scale * .46f);
+            setImageMatrix(frame);
+          }
+        };
+    backdrop.setId(R.id.home_wallpaper);
+    backdrop.setScaleType(ImageView.ScaleType.MATRIX);
+    backdrop.setImageResource(R.drawable.home_wallpaper);
     addView(backdrop, new FrameLayout.LayoutParams(-1, -1));
-    View shade = new View(context);
-    shade.setBackground(
-        new GradientDrawable(
-            GradientDrawable.Orientation.LEFT_RIGHT,
-            new int[] {0xe807090b, 0x55090a0c, 0x99090a0c}));
-    addView(shade, new FrameLayout.LayoutParams(-1, -1));
     View fade = new View(context);
-    fade.setBackground(
+    GradientDrawable gradient =
         new GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[] {0x33090a0c, 0x22090a0c, NativeUi.BACKGROUND}));
+            new int[] {0x30090b0d, 0x18090b0d, 0x88090b0d, 0xf5090b0d, NativeUi.BACKGROUND});
+    gradient.setColors(
+        new int[] {0x30090b0d, 0x18090b0d, 0x88090b0d, 0xf5090b0d, NativeUi.BACKGROUND},
+        new float[] {0, .16f, .32f, .53f, .72f});
+    fade.setBackground(gradient);
     addView(fade, new FrameLayout.LayoutParams(-1, -1));
 
-    hero = new LinearLayout(context);
-    hero.setOrientation(LinearLayout.VERTICAL);
-    hero.setPadding(
-        ui.px(115),
-        Math.max(
-            0,
-            Math.round(context.getResources().getDisplayMetrics().heightPixels * .45f)
-                - ui.px(100)),
-        ui.px(115),
-        ui.px(36));
-    hero.setLayoutParams(new RecyclerView.LayoutParams(-1, -2));
-    TextView eyebrow = ui.text("—  THE FEATURE PRESENTATION", 17, 0xffe4d7bf);
-    eyebrow.setLetterSpacing(.14f);
-    hero.addView(eyebrow);
-    heroTitle = ui.text("Find your next story.", 48, Color.WHITE);
-    heroTitle.setId(R.id.hero_title);
-    heroTitle.setTypeface(ui.font, Typeface.BOLD);
-    heroTitle.setMaxLines(2);
-    heroTitle.setEllipsize(TextUtils.TruncateAt.END);
-    addHero(heroTitle, -2, 25);
-    heroMeta = ui.text("Live discovery by Cinemeta", 22, 0xffc5c3bf);
-    addHero(heroMeta, -2, 9);
-    heroDescription = ui.text(catalogMessage, 24, 0xffd5d1cb);
-    heroDescription.setId(R.id.hero_description);
-    heroDescription.setMaxLines(2);
-    heroDescription.setEllipsize(TextUtils.TruncateAt.END);
-    heroDescription.setLineSpacing(0, 1.15f);
-    addHero(heroDescription, ui.px(60), 23);
-    actions = new LinearLayout(context);
-    actions.setOrientation(LinearLayout.HORIZONTAL);
-    openTitle =
-        ui.button(
-            "Settings",
-            () -> {
-              JSONObject item = currentHero();
-              if (item == null) showSettings();
-              else listener.onOpenTitle(item);
-            });
-    moreInfo = ui.button("ⓘ  More info", () -> openDetails(currentHero()));
-    openTitle.setId(R.id.hero_open);
-    moreInfo.setId(R.id.hero_more);
-    actions.addView(openTitle);
-    LinearLayout.LayoutParams infoLayout = new LinearLayout.LayoutParams(-2, -2);
-    infoLayout.leftMargin = ui.px(11);
-    actions.addView(moreInfo, infoLayout);
-    addHero(actions, -2, 27);
-    indicators = new LinearLayout(context);
-    indicators.setId(R.id.feature_selectors);
-    indicators.setGravity(Gravity.CENTER_VERTICAL);
-    addHero(indicators, ui.px(26), 28);
     homeRows = verticalList();
     homeRows.setId(R.id.home_rows);
-    homeAdapter = new NativeRowAdapter(ui, images, hero, this::activateCard);
+    homeAdapter = new NativeRowAdapter(ui, images, null, this::activateCard);
+    homeAdapter.setOnFocusedCard(
+        (row, card) -> {
+          if ("apps".equals(row) && card.app != null && !card.app.id.equals(selectedAppId)) {
+            selectedAppId = card.app.id;
+            renderHome();
+          }
+        });
+    homeAdapter.setInitialTopInset(
+        Math.round(context.getResources().getDisplayMetrics().heightPixels * .15f));
     homeRows.setAdapter(homeAdapter);
-    // A real clipped viewport keeps previously scrolled text clear of the fixed navigation.
-    // Compensating hero padding above preserves all initial design-coordinate positions.
+    // Clip scrolling content below the fixed glass header, with a scenic initial top inset.
     homeRows.setClipChildren(true);
     homeRows.setClipToPadding(true);
     FrameLayout.LayoutParams homeLayout = new FrameLayout.LayoutParams(-1, -1);
-    homeLayout.topMargin = ui.px(100);
+    homeLayout.topMargin =
+        Math.round(context.getResources().getDisplayMetrics().heightPixels * .15f);
     addView(homeRows, homeLayout);
 
     searchPage = new LinearLayout(context);
@@ -265,7 +217,9 @@ final class NativeHomeView extends FrameLayout {
         });
 
     nav = new LinearLayout(context);
+    nav.setId(R.id.home_header);
     nav.setOrientation(LinearLayout.HORIZONTAL);
+    nav.setGravity(Gravity.CENTER_VERTICAL);
     nav.setPadding(ui.px(5), ui.px(5), ui.px(5), ui.px(5));
     GradientDrawable capsule = ui.surface(0x88151619, 30);
     capsule.setStroke(ui.px(1), 0x1cffffff);
@@ -283,10 +237,7 @@ final class NativeHomeView extends FrameLayout {
             if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN
                 && event.getAction() == KeyEvent.ACTION_DOWN) {
               if (searchVisible) searchInput.requestFocus();
-              else {
-                homeRows.scrollToPosition(0);
-                openTitle.requestFocus();
-              }
+              else homeAdapter.focusFirst(() -> homeButton.requestFocus());
               return true;
             }
             return false;
@@ -300,10 +251,7 @@ final class NativeHomeView extends FrameLayout {
     navLayout.topMargin = ui.px(26);
     addView(nav, navLayout);
     nav.setElevation(ui.px(15));
-    openTitle.setOnKeyListener((v, code, event) -> heroKey(code, event));
-    moreInfo.setOnKeyListener((v, code, event) -> heroKey(code, event));
     renderHome();
-    renderHero();
     updateNavigationSelection();
     getViewTreeObserver()
         .addOnGlobalLayoutListener(
@@ -314,23 +262,13 @@ final class NativeHomeView extends FrameLayout {
                 if (!startupFocusPending) getViewTreeObserver().removeOnGlobalLayoutListener(this);
               }
             });
-    getViewTreeObserver()
-        .addOnGlobalFocusChangeListener(
-            (oldFocus, newFocus) -> {
-              if (!searchVisible
-                  && newFocus != null
-                  && !homeAdapter.hasPendingFocus()
-                  && (isDescendant(nav, newFocus) || isDescendant(actions, newFocus)))
-                homeRows.scrollToPosition(0);
-              scheduleCarousel();
-            });
   }
 
   private void tryStartupFocus() {
     if (!startupFocusPending || released || !active || !hasWindowFocus()) return;
-    if (!openTitle.isAttachedToWindow() || !openTitle.isLaidOut() || !openTitle.isShown()) return;
-    // Attachment alone does not guarantee window focus or that touch-mode focus is accepted.
-    if (openTitle.requestFocus()) startupFocusPending = false;
+    if (snapshot.apps.isEmpty() && snapshot.watchNextLoading) return;
+    homeAdapter.focusFirst(() -> homeButton.requestFocus());
+    startupFocusPending = false;
   }
 
   @Override
@@ -369,121 +307,10 @@ final class NativeHomeView extends FrameLayout {
     return list;
   }
 
-  private void addHero(View view, int height, int top) {
-    LinearLayout.LayoutParams layout = new LinearLayout.LayoutParams(ui.px(1100), height);
-    layout.topMargin = ui.px(top);
-    hero.addView(view, layout);
-  }
-
-  private boolean heroKey(int code, KeyEvent event) {
-    if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
-    if (code == KeyEvent.KEYCODE_DPAD_UP) {
-      homeButton.requestFocus();
-      return true;
-    }
-    if (code == KeyEvent.KEYCODE_DPAD_DOWN && indicators.getChildCount() > 0) {
-      indicators.getChildAt(heroIndex).requestFocus();
-      return true;
-    }
-    return false;
-  }
-
-  private JSONObject currentHero() {
-    return featured.isEmpty() ? null : featured.get(Math.min(heroIndex, featured.size() - 1));
-  }
-
-  private void renderHero() {
-    JSONObject item = currentHero();
-    heroTitle.setText(item == null ? "Find your next story." : item.optString("title"));
-    heroMeta.setText(item == null ? "Live discovery by Cinemeta" : NativeCard.metadata(item));
-    heroDescription.setText(item == null ? catalogMessage : item.optString("overview"));
-    openTitle.setText(item == null ? "Settings" : "▶  Open in Stremio");
-    moreInfo.setVisibility(item == null ? GONE : VISIBLE);
-    if (item != null)
-      images.load(
-          backdrop,
-          NativeCard.firstArt(item, "art", "poster"),
-          getResources().getDisplayMetrics().widthPixels,
-          getResources().getDisplayMetrics().heightPixels);
-    int focused = -1;
-    for (int i = 0; i < indicators.getChildCount(); i++)
-      if (indicators.getChildAt(i).hasFocus()) focused = i;
-    indicators.removeAllViews();
-    for (int i = 0; i < featured.size(); i++) {
-      final int index = i;
-      NativeCarouselDot dot = new NativeCarouselDot(getContext(), i == heroIndex);
-      dot.setOnClickListener(v -> selectHero(index));
-      dot.setContentDescription("Feature " + featured.get(i).optString("title"));
-      dot.setSelected(i == heroIndex);
-      LinearLayout.LayoutParams lp =
-          new LinearLayout.LayoutParams(ui.px(i == heroIndex ? 42 : 12), ui.px(12));
-      lp.rightMargin = ui.px(10);
-      indicators.addView(dot, lp);
-      dot.setOnKeyListener(
-          (v, code, event) -> {
-            if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
-            if (code == KeyEvent.KEYCODE_DPAD_UP) {
-              openTitle.requestFocus();
-              return true;
-            }
-            int step =
-                code == KeyEvent.KEYCODE_DPAD_RIGHT
-                    ? 1
-                    : code == KeyEvent.KEYCODE_DPAD_LEFT ? -1 : 0;
-            if (step != 0) {
-              if (getLayoutDirection() == LAYOUT_DIRECTION_RTL) step = -step;
-              selectHero(Math.max(0, Math.min(featured.size() - 1, index + step)));
-              indicators.getChildAt(heroIndex).requestFocus();
-              return true;
-            }
-            return false;
-          });
-    }
-    if (!featured.isEmpty()) {
-      TextView count =
-          ui.text(
-              String.format(Locale.ROOT, "%02d / %02d", heroIndex + 1, featured.size()),
-              17,
-              0xffa4a4a8);
-      count.setPadding(ui.px(12), 0, 0, 0);
-      indicators.addView(count);
-    }
-    if (focused >= 0 && !featured.isEmpty())
-      indicators.getChildAt(Math.min(focused, indicators.getChildCount() - 1)).requestFocus();
-  }
-
-  private void selectHero(int index) {
-    heroIndex = index;
-    renderHero();
-    scheduleCarousel();
-  }
-
-  private boolean carouselEligible() {
-    View focused = findFocus();
-    return active
-        && !released
-        && !searchVisible
-        && dialog == null
-        && featured.size() > 1
-        && !(focused != null && isDescendant(indicators, focused));
-  }
-
   private static boolean isDescendant(View ancestor, View view) {
     for (android.view.ViewParent p = view.getParent(); p != null; p = p.getParent())
       if (p == ancestor) return true;
     return false;
-  }
-
-  private void scheduleCarousel() {
-    main.removeCallbacks(carousel);
-    main.removeCallbacks(progressTick);
-    carouselStarted = android.os.SystemClock.uptimeMillis();
-    View dot = indicators.getChildAt(heroIndex);
-    if (dot instanceof NativeCarouselDot) ((NativeCarouselDot) dot).setProgress(0);
-    if (carouselEligible()) {
-      main.postDelayed(carousel, 8000);
-      main.postDelayed(progressTick, 100);
-    }
   }
 
   void renderSnapshot(Library.Snapshot snapshot) {
@@ -494,18 +321,11 @@ final class NativeHomeView extends FrameLayout {
 
   void renderCatalog(JSONObject result) {
     catalog = items(result.optJSONArray("items"));
-    featured = items(result.optJSONArray("featured"));
-    if (featured.isEmpty())
-      featured = new ArrayList<>(catalog.subList(0, Math.min(4, catalog.size())));
-    if (featured.size() > 4) featured = new ArrayList<>(featured.subList(0, 4));
     catalogStale = result.optBoolean("stale");
     catalogMessage =
         result.optString(
             "message", "The catalog is unavailable. Your streaming apps remain available.");
-    heroIndex = Math.min(heroIndex, Math.max(0, featured.size() - 1));
-    renderHero();
     renderHome();
-    scheduleCarousel();
   }
 
   void renderAppSearch(List<Library.Program> results, boolean finished) {
@@ -534,15 +354,15 @@ final class NativeHomeView extends FrameLayout {
 
   private void renderHome() {
     List<NativeRowAdapter.Row> rows = new ArrayList<>();
-    rows.add(
-        new NativeRowAdapter.Row("hero", "", "", NativeCard.Kind.ACTION, Collections.emptyList()));
     List<NativeCard> watch = new ArrayList<>();
     for (Library.Program program : snapshot.programs) watch.add(NativeCard.program(program, true));
     rows.add(
         new NativeRowAdapter.Row(
             "watch",
             "Continue Watching",
-            watch.isEmpty() ? snapshot.programStatus : "",
+            watch.isEmpty()
+                ? snapshot.programStatus
+                : snapshot.watchNextLoading ? "Updating shared history…" : "",
             NativeCard.Kind.WATCH,
             watch));
     List<NativeCard> apps = new ArrayList<>();
@@ -550,24 +370,56 @@ final class NativeHomeView extends FrameLayout {
     rows.add(
         new NativeRowAdapter.Row(
             "apps", "Your apps", "Most recently opened", NativeCard.Kind.APP, apps));
-    for (Library.Channel channel : snapshot.channels) {
-      List<NativeCard> cards = new ArrayList<>();
-      for (Library.Program p : channel.programs) cards.add(NativeCard.program(p, false));
-      if (!cards.isEmpty())
-        rows.add(
-            new NativeRowAdapter.Row(
-                "channel:" + channel.id,
-                channel.title,
-                NativeCard.owner(channel.owner) + " · Shared by this app",
-                NativeCard.Kind.POSTER,
-                cards));
-    }
+    Library.App selected = null;
+    for (Library.App app : snapshot.apps)
+      if (app.launch != null && app.id.equals(selectedAppId)) selected = app;
+    if (selected == null)
+      for (Library.App app : snapshot.apps)
+        if (app.launch != null) {
+          selected = app;
+          break;
+        }
+    selectedAppId = selected == null ? null : selected.id;
+    homeAdapter.setSelectedApp(selectedAppId == null ? null : "app:" + selectedAppId);
+    List<NativeCard> recommendations = new ArrayList<>();
+    Set<String> seenPrograms = new HashSet<>();
+    if (selected != null)
+      for (Library.Channel channel : snapshot.channels)
+        if (selected.id.equals(channel.owner))
+          for (Library.Program program : channel.programs)
+            if (selected.id.equals(program.owner) && seenPrograms.add(program.id))
+              recommendations.add(NativeCard.recommendation(program));
+    String recommendationSource =
+        selected == null
+            ? snapshot.apps.isEmpty() && snapshot.recommendationsLoading
+                ? "Loading installed apps…"
+                : "Highlight an installed app to see its shared recommendations."
+            : recommendations.isEmpty()
+                ? snapshot.recommendationsLoading
+                    ? "Loading recommendations from " + selected.label + "…"
+                    : ("error".equals(snapshot.channelCapability)
+                            || "restricted".equals(snapshot.channelCapability)
+                            || "unavailable".equals(snapshot.channelCapability)
+                            || "disabled".equals(snapshot.channelCapability))
+                        ? snapshot.channelStatus
+                        : "No recommendations shared by " + selected.label + "."
+                : selected.label
+                    + " · Shared by this app"
+                    + (snapshot.recommendationsLoading ? " · Updating…" : "");
+    rows.add(
+        new NativeRowAdapter.Row(
+            "recommendations",
+            "Recommendations",
+            recommendationSource,
+            NativeCard.Kind.RECOMMENDATION,
+            recommendations,
+            "recommendations:" + (selectedAppId == null ? "none" : selectedAppId)));
     List<NativeCard> discovery = new ArrayList<>();
     for (JSONObject item : catalog) discovery.add(NativeCard.title(item));
     rows.add(
         new NativeRowAdapter.Row(
             "discovery",
-            "Discover with Cinemeta",
+            "Discover",
             catalogStale
                 ? "Previously fetched Cinemeta catalog"
                 : discovery.isEmpty()
@@ -575,12 +427,26 @@ final class NativeHomeView extends FrameLayout {
                     : "Live discovery from Cinemeta. Explore popular movies and series.",
             NativeCard.Kind.POSTER,
             discovery));
+    List<NativeCard> inputs = new ArrayList<>();
+    for (TvInputs.Entry input : snapshot.inputs) inputs.add(NativeCard.input(input));
+    if (inputs.isEmpty())
+      inputs.add(NativeCard.control("input-menu", "Inputs", "Open system input menu"));
+    inputs.add(NativeCard.control("system-settings", "Settings", "Picture, sound & more"));
+    inputs.add(NativeCard.control("system-home", "TV Home", "Built-in TV launcher"));
+    rows.add(
+        new NativeRowAdapter.Row("inputs", "Inputs & controls", "", NativeCard.Kind.INPUT, inputs));
     homeAdapter.submitList(rows);
+    homeRows.post(this::tryStartupFocus);
   }
 
   private void activateCard(NativeCard card) {
     hideKeyboard();
-    if (card.app != null) listener.onLaunchApp(card.app.id);
+    if (card.kind == NativeCard.Kind.INPUT) {
+      if (card.id.equals("control:input-menu")) listener.onInput(null);
+      else if (card.id.equals("control:system-settings")) listener.onSystemSettings();
+      else if (card.id.equals("control:system-home")) listener.onSystemHome();
+      else listener.onInput(card.id.substring("input:".length()));
+    } else if (card.app != null) listener.onLaunchApp(card.app.id);
     else if (card.item != null) openDetails(card.item);
     else listener.onResumeProgram(card.id);
   }
@@ -672,8 +538,7 @@ final class NativeHomeView extends FrameLayout {
     searchPage.setVisibility(GONE);
     homeRows.setVisibility(VISIBLE);
     homeRows.scrollToPosition(0);
-    homeButton.requestFocus();
-    scheduleCarousel();
+    homeAdapter.focusFirst(() -> homeButton.requestFocus());
   }
 
   void showSearch() {
@@ -688,7 +553,6 @@ final class NativeHomeView extends FrameLayout {
     ((InputMethodManager) getContext().getSystemService(Context.INPUT_METHOD_SERVICE))
         .showSoftInput(searchInput, InputMethodManager.SHOW_IMPLICIT);
     if (searchPending && active) main.postDelayed(submitSearch, 320);
-    scheduleCarousel();
   }
 
   boolean isSearchVisible() {
@@ -703,7 +567,6 @@ final class NativeHomeView extends FrameLayout {
     main.removeCallbacks(submitSearch);
     if (active && searchVisible && searchPending && submittedQuery.isEmpty())
       main.postDelayed(submitSearch, 320);
-    scheduleCarousel();
   }
 
   void release() {
@@ -712,7 +575,7 @@ final class NativeHomeView extends FrameLayout {
     closeDialog(false);
     homeRows.setAdapter(null);
     searchRows.setAdapter(null);
-    images.clear(backdrop);
+    backdrop.setImageDrawable(null);
   }
 
   private void hideKeyboard() {
@@ -816,8 +679,9 @@ final class NativeHomeView extends FrameLayout {
     TextView description =
         ui.text(
             "Continue Watching shows real history shared by your apps. Your apps are ordered by"
-                + " most recently opened. Shared app recommendations appear below them. Discovery"
-                + " and search use live Cinemeta metadata; discovery titles open in Stremio.",
+                + " most recently opened. Highlight an app to see its shared recommendations below."
+                + " Discovery and search use live Cinemeta metadata; discovery titles open in"
+                + " Stremio.",
             24,
             NativeUi.MUTED);
     description.setPadding(0, 0, 0, ui.px(25));
@@ -910,7 +774,6 @@ final class NativeHomeView extends FrameLayout {
           return false;
         });
     dialog.setOnCancelListener(d -> closeDialog(true));
-    scheduleCarousel();
     return content;
   }
 
@@ -925,7 +788,6 @@ final class NativeHomeView extends FrameLayout {
           ui.px(850), Math.round(getResources().getDisplayMetrics().heightPixels * .9f));
     }
     first.requestFocus();
-    scheduleCarousel();
   }
 
   private void closeDialog(boolean restore) {
@@ -946,10 +808,9 @@ final class NativeHomeView extends FrameLayout {
         && dialogReturnFocus.isFocusable()) dialogReturnFocus.requestFocus();
     else if (restore) {
       if (searchVisible) searchInput.requestFocus();
-      else openTitle.requestFocus();
+      else homeAdapter.focusFirst(() -> homeButton.requestFocus());
     }
     dialogReturnFocus = null;
-    scheduleCarousel();
   }
 
   boolean handleBack() {
@@ -977,15 +838,14 @@ final class NativeHomeView extends FrameLayout {
   }
 
   private boolean focusHomeHeader() {
-    View target = featured.isEmpty() ? openTitle : indicators.getChildAt(heroIndex);
-    return target != null && target.requestFocus();
+    homeRows.scrollToPosition(0);
+    return homeButton.requestFocus();
   }
 
   @Override
   public boolean dispatchKeyEvent(KeyEvent event) {
     if (event.getAction() == KeyEvent.ACTION_DOWN) {
       startupFocusPending = false;
-      scheduleCarousel();
       int key = event.getKeyCode();
       if (dialog == null
           && (key == KeyEvent.KEYCODE_DPAD_UP || key == KeyEvent.KEYCODE_DPAD_DOWN)) {
@@ -1007,15 +867,7 @@ final class NativeHomeView extends FrameLayout {
         } else {
           if (homeAdapter.hasPendingFocus()
               && homeAdapter.moveVertical(direction, this::focusHomeHeader)) return true;
-          if (direction > 0
-              && focused != null
-              && (isDescendant(indicators, focused)
-                  || featured.isEmpty() && isDescendant(actions, focused))) {
-            homeAdapter.focusFirst(this::focusHomeHeader);
-            return true;
-          }
-          if (homeAdapter.hasPendingFocus()
-              || focused != null && isDescendant(homeRows, focused) && !isDescendant(hero, focused))
+          if (homeAdapter.hasPendingFocus() || focused != null && isDescendant(homeRows, focused))
             if (homeAdapter.moveVertical(direction, this::focusHomeHeader)) return true;
         }
       } else cancelRowFocus();

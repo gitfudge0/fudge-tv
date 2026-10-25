@@ -6,7 +6,9 @@ AndroidX RecyclerView 1.4.0 and its transitive AndroidX dependencies are provide
 - JUnit 4.13.2, used for tests: https://junit.org/junit4/license.html
 - Google Java Format 1.24.0, used by `format.sh`: https://github.com/google/google-java-format/blob/v1.24.0/LICENSE
 
-Inter Variable is bundled as the native Android font `app/src/main/res/font/inter.ttf`, obtained from Google Fonts. Its SIL Open Font License is included at `app/src/main/assets/fonts/Inter-LICENSE.txt`. The native interface follows the user-supplied Cinema concept; the old web presentation, WOFF2 font, stock film JPGs, and generated scenic image are removed from the package.
+Inter Variable is bundled as the native Android font `app/src/main/res/font/inter.ttf`, obtained from Google Fonts. Its SIL Open Font License is included at `app/src/main/assets/fonts/Inter-LICENSE.txt`. The native interface follows the user-approved wallpaper and input-row mock; no web presentation or WOFF2 font is packaged.
+
+The fixed mountain wallpaper is the unmodified user-selected Unsplash photograph, bundled locally as `app/src/main/res/drawable-nodpi/home_wallpaper.jpg`. Source: https://images.unsplash.com/photo-1590142035743-0ffa020065e6 . Unsplash license: https://unsplash.com/license . No runtime wallpaper request is made.
 
 Movie and series metadata is supplied by the official Cinemeta add-on, https://v3-cinemeta.strem.io/manifest.json . Metadata and artwork belong to their respective owners. Stremio is a separate installed application; this launcher opens its registered title-detail links and provides no streams or playback engine.
 

@@ -16,6 +16,15 @@ public final class NativeLifecycleTestActivity extends MainActivity {
 
   static final class Fixture {
     final AtomicInteger searches = new AtomicInteger();
+    boolean stagedLibrary;
+    final AtomicInteger libraryLoads = new AtomicInteger();
+    final CountDownLatch libraryStarted = new CountDownLatch(1);
+    final CountDownLatch releaseWatch = new CountDownLatch(1);
+    final CountDownLatch watchReady = new CountDownLatch(1);
+    final CountDownLatch releasePreviews = new CountDownLatch(1);
+    final CountDownLatch secondLibrary = new CountDownLatch(1);
+    final CountDownLatch releaseSecondLibrary = new CountDownLatch(1);
+    final CountDownLatch libraryCanceled = new CountDownLatch(1);
     final CountDownLatch firstStarted = new CountDownLatch(1);
     final CountDownLatch firstCanceled = new CountDownLatch(1);
     final CountDownLatch resumedSearch = new CountDownLatch(1);
@@ -44,6 +53,54 @@ public final class NativeLifecycleTestActivity extends MainActivity {
                           .put("type", type)
                           .put("name", "Native fixture")));
     }
+  }
+
+  @Override
+  protected Library.Snapshot loadLibraryApps(android.os.CancellationSignal signal) {
+    if (!fixture.stagedLibrary) return super.loadLibraryApps(signal);
+    Library.Snapshot apps = NativeUiTestActivity.fixtureSnapshot();
+    apps.programs.clear();
+    apps.channels.clear();
+    return apps;
+  }
+
+  @Override
+  protected Library.Snapshot loadLibraryRecommendations(
+      Library.Snapshot apps,
+      android.os.CancellationSignal signal,
+      java.util.function.Consumer<Library.Snapshot> watchCallback) {
+    Fixture current = fixture;
+    if (!current.stagedLibrary)
+      return super.loadLibraryRecommendations(apps, signal, watchCallback);
+    int load = current.libraryLoads.incrementAndGet();
+    if (load == 1) {
+      current.libraryStarted.countDown();
+      try {
+        awaitLibrary(current.releaseWatch, signal);
+      } catch (android.os.OperationCanceledException canceled) {
+        current.libraryCanceled.countDown();
+        throw canceled;
+      }
+      Library.Snapshot watch = NativeUiTestActivity.fixtureSnapshot();
+      watch.channels.clear();
+      watchCallback.accept(watch);
+      current.watchReady.countDown();
+      awaitLibrary(current.releasePreviews, signal);
+    } else {
+      current.secondLibrary.countDown();
+      awaitLibrary(current.releaseSecondLibrary, signal);
+    }
+    return NativeUiTestActivity.fixtureSnapshot();
+  }
+
+  private static void awaitLibrary(CountDownLatch release, android.os.CancellationSignal signal) {
+    try {
+      if (!release.await(8, TimeUnit.SECONDS))
+        throw new AssertionError("Fixture provider timed out");
+    } catch (InterruptedException canceled) {
+      throw new android.os.OperationCanceledException();
+    }
+    signal.throwIfCanceled();
   }
 
   @Override

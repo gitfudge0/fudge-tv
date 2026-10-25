@@ -35,6 +35,30 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
   private String pendingQuery;
   private JSONObject pendingDetail;
   private CancellationSignal libraryCancellation;
+  private boolean libraryLoading, libraryDirty;
+  private android.media.tv.TvInputManager inputsManager;
+  private final android.media.tv.TvInputManager.TvInputCallback inputsChanged =
+      new android.media.tv.TvInputManager.TvInputCallback() {
+        @Override
+        public void onInputAdded(String id) {
+          scheduleRecommendationRefresh();
+        }
+
+        @Override
+        public void onInputRemoved(String id) {
+          scheduleRecommendationRefresh();
+        }
+
+        @Override
+        public void onInputUpdated(String id) {
+          scheduleRecommendationRefresh();
+        }
+
+        @Override
+        public void onInputStateChanged(String id, int state) {
+          scheduleRecommendationRefresh();
+        }
+      };
   private final RecommendationRefresh recommendationRefresh =
       new RecommendationRefresh(
           new RecommendationRefresh.Scheduler() {
@@ -80,6 +104,9 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
     catalog = createCatalog();
     appSearch = new AppSearch(this);
     home = new NativeHomeView(this, images, this);
+    snapshot.programStatus = "Loading shared Continue Watching…";
+    snapshot.watchNextLoading = snapshot.recommendationsLoading = true;
+    home.renderSnapshot(snapshot);
     setContentView(home);
   }
 
@@ -134,39 +161,180 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
   private void cancelLibrary() {
     if (libraryCancellation != null) libraryCancellation.cancel();
     libraryExecutor.cancel(LatestRequests.Lane.LIBRARY);
+    libraryLoading = libraryDirty = false;
+  }
+
+  protected Library.Snapshot loadLibraryApps(CancellationSignal signal) {
+    return Library.loadApps(getApplicationContext(), signal);
+  }
+
+  protected Library.Snapshot loadLibraryRecommendations(
+      Library.Snapshot apps,
+      CancellationSignal signal,
+      java.util.function.Consumer<Library.Snapshot> watchReady) {
+    return Library.loadRecommendations(getApplicationContext(), apps, signal, true, watchReady);
   }
 
   private void refreshLibrary() {
-    cancelLibrary();
+    if (libraryLoading) {
+      libraryDirty = true;
+      return;
+    }
+    libraryLoading = true;
+    final Library.Snapshot previous = snapshot;
+    final long started = android.os.SystemClock.elapsedRealtime();
     final int generation = ++libraryGeneration;
     final CancellationSignal cancellation = new CancellationSignal();
     libraryCancellation = cancellation;
     libraryExecutor.submit(
         LatestRequests.Lane.LIBRARY,
         () -> {
-          Library.Snapshot next;
           try {
-            next = Library.load(getApplicationContext(), cancellation);
+            Library.Snapshot inventory = loadLibraryApps(cancellation);
+            android.util.Log.i(
+                "FudgeLibrary",
+                "Apps ready in "
+                    + (android.os.SystemClock.elapsedRealtime() - started)
+                    + " ms; apps="
+                    + inventory.apps.size());
+            Library.Snapshot interim = retainedRecommendations(inventory, previous, true);
+            deliverLibrary(interim, generation, false);
+            Library.Snapshot next =
+                loadLibraryRecommendations(
+                    inventory,
+                    cancellation,
+                    watch -> {
+                      android.util.Log.i(
+                          "FudgeLibrary",
+                          "Watch ready in "
+                              + (android.os.SystemClock.elapsedRealtime() - started)
+                              + " ms; items="
+                              + watch.programs.size());
+                      deliverLibrary(
+                          retainedRecommendations(watch, previous, false), generation, false);
+                    });
+            android.util.Log.i(
+                "FudgeLibrary",
+                "Recommendations ready in "
+                    + (android.os.SystemClock.elapsedRealtime() - started)
+                    + " ms; apps="
+                    + next.channels.size());
+            if (!Thread.currentThread().isInterrupted()) deliverLibrary(next, generation, true);
           } catch (OperationCanceledException ignored) {
-            return;
+            // Lifecycle cancellation invalidates every already-posted stage by generation.
+          } catch (RuntimeException failure) {
+            android.util.Log.e("FudgeLibrary", "Library snapshot load failed", failure);
+            main.post(
+                () -> {
+                  if (!resumed || generation != libraryGeneration) return;
+                  Library.Snapshot failed = Library.copy(snapshot);
+                  failed.recommendationsLoading = failed.watchNextLoading = false;
+                  failed.programStatus = "Shared history could not be refreshed.";
+                  failed.channelStatus = "Shared recommendations could not be refreshed.";
+                  failed.channelCapability = "error";
+                  applyLibrary(failed);
+                  finishLibraryRefresh();
+                });
           }
-          if (Thread.currentThread().isInterrupted()) return;
-          main.post(
-              () -> {
-                if (!resumed || generation != libraryGeneration) return;
-                snapshot = next;
-                programs.clear();
-                apps.clear();
-                for (Library.Program program : next.programs) programs.put(program.id, program);
-                for (Library.Channel channel : next.channels)
-                  for (Library.Program program : channel.programs)
-                    programs.put(program.id, program);
-                for (Library.App app : next.allApps) apps.put(app.id, app);
-                for (Library.App app : next.apps) apps.put(app.id, app);
-                home.renderSnapshot(next);
-                if (pendingQuery != null) loadSearch(pendingQuery);
-              });
         });
+  }
+
+  private Library.Snapshot retainedRecommendations(
+      Library.Snapshot fresh, Library.Snapshot previous, boolean retainWatch) {
+    Library.Snapshot result = Library.copy(fresh);
+    java.util.Set<String> installed = new java.util.HashSet<>();
+    for (Library.App app : fresh.allApps) if (app.launch != null) installed.add(app.id);
+    for (Library.App app : fresh.apps) if (app.launch != null) installed.add(app.id);
+    if (retainWatch) {
+      result.programs.clear();
+      for (Library.Program program : previous.programs)
+        if (installed.contains(program.owner)) result.programs.add(program);
+      result.watchNextLoading = true;
+      result.programStatus = "Loading shared Continue Watching…";
+    }
+    for (Library.Channel channel : previous.channels)
+      if (installed.contains(channel.owner)) result.channels.add(channel);
+    for (Library.Channel channel : previous.recommendationChannels)
+      if (installed.contains(channel.owner)) result.recommendationChannels.add(channel);
+    result.recommendationsLoading = true;
+    result.channelStatus = "Loading shared recommendations…";
+    return result;
+  }
+
+  private void deliverLibrary(Library.Snapshot next, int generation, boolean complete) {
+    main.post(
+        () -> {
+          if (!resumed || generation != libraryGeneration) return;
+          applyLibrary(next);
+          if (complete) finishLibraryRefresh();
+        });
+  }
+
+  // Preference changes invalidate work read under an older visibility contract immediately.
+  void refreshRecommendationPreferences() {
+    cancelLibrary();
+    libraryGeneration++;
+    applyLibrary(snapshot);
+    if (resumed) refreshLibrary();
+  }
+
+  private Library.Snapshot visibleRecommendations(Library.Snapshot source) {
+    Library.Snapshot result = Library.copy(source);
+    android.content.SharedPreferences prefs = getSharedPreferences("recommendations", MODE_PRIVATE);
+    boolean enabled = prefs.getBoolean("enabled", true);
+    boolean watch = enabled && prefs.getBoolean("watchNext", true);
+    if (!watch) {
+      result.programs.clear();
+      result.watchNextLoading = false;
+      result.programStatus = "Continue Watching is turned off.";
+    }
+    if (!enabled) {
+      result.channels.clear();
+      result.recommendationsLoading = false;
+      result.channelCapability = "disabled";
+      result.channelStatus = "Recommendations are turned off.";
+      return result;
+    }
+    Set<String> hidden = prefs.getStringSet("hidden", Collections.emptySet());
+    result.channels.clear();
+    for (Library.Channel channel : source.channels) {
+      if (hidden.contains(channel.id)) continue;
+      Library.Channel visible = new Library.Channel();
+      visible.id = channel.id;
+      visible.owner = channel.owner;
+      visible.title = channel.title;
+      visible.logo = channel.logo;
+      visible.systemChannelKey = channel.systemChannelKey;
+      visible.browsable = channel.browsable;
+      visible.numericId = channel.numericId;
+      visible.order = channel.order;
+      for (Library.Program program : channel.programs)
+        if (!hidden.contains(program.channelId)) visible.programs.add(program);
+      if (!visible.programs.isEmpty()) result.channels.add(visible);
+    }
+    return result;
+  }
+
+  private void finishLibraryRefresh() {
+    libraryLoading = false;
+    if (libraryDirty) {
+      libraryDirty = false;
+      refreshLibrary();
+    }
+  }
+
+  private void applyLibrary(Library.Snapshot next) {
+    next = visibleRecommendations(next);
+    snapshot = next;
+    programs.clear();
+    apps.clear();
+    for (Library.Program program : next.programs) programs.put(program.id, program);
+    for (Library.Channel channel : next.channels)
+      for (Library.Program program : channel.programs) programs.put(program.id, program);
+    for (Library.App app : next.allApps) apps.put(app.id, app);
+    for (Library.App app : next.apps) apps.put(app.id, app);
+    home.renderSnapshot(next);
+    if (pendingQuery != null) loadSearch(pendingQuery);
   }
 
   private void loadHome() {
@@ -302,6 +470,36 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
   @Override
   public void onAllApps() {
     allApps();
+  }
+
+  @Override
+  public void onInput(String id) {
+    if (id == null) {
+      systemInputs();
+      return;
+    }
+    try {
+      Intent intent = TvInputs.viewIntent(id);
+      if (intent.resolveActivity(getPackageManager()) == null) systemInputs();
+      else startActivity(intent);
+    } catch (SecurityException | ActivityNotFoundException failure) {
+      systemInputs();
+    }
+  }
+
+  @Override
+  public void onSystemHome() {
+    Intent intent = TvInputs.systemHomeIntent(this);
+    if (intent != null) openSystem(intent);
+    else {
+      toast("The built-in TV home is unavailable.");
+      systemInputs();
+    }
+  }
+
+  @Override
+  public void onSystemSettings() {
+    openSystem(new Intent(Settings.ACTION_SETTINGS));
   }
 
   @Override
@@ -452,7 +650,7 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
               if (index < 2) {
                 String key = index == 0 ? "enabled" : "watchNext";
                 prefs.edit().putBoolean(key, !prefs.getBoolean(key, true)).apply();
-                refreshLibrary();
+                refreshRecommendationPreferences();
                 recommendationSettings();
               } else if (index == 2) {
                 String[] values = {"10", "20", "30", "40"};
@@ -462,7 +660,7 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
                         values,
                         (d, i) -> {
                           prefs.edit().putInt("maxItems", Integer.parseInt(values[i])).apply();
-                          refreshLibrary();
+                          refreshRecommendationPreferences();
                         })
                     .show();
               } else if (index == 3) recommendationChannels(false);
@@ -500,7 +698,7 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
             order.remove(channels.get(index).id);
             order.add(0, channels.get(index).id);
             prefs.edit().putString("order", android.text.TextUtils.join(",", order)).apply();
-            refreshLibrary();
+            refreshRecommendationPreferences();
           });
     else
       builder
@@ -515,7 +713,7 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
               "Save",
               (dialog, index) -> {
                 prefs.edit().putStringSet("hidden", hidden).apply();
-                refreshLibrary();
+                refreshRecommendationPreferences();
               });
     builder.setNegativeButton("Close", null).show();
   }
@@ -631,6 +829,13 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
     super.onResume();
     resumed = true;
     recommendationRefresh.start();
+    inputsManager = (android.media.tv.TvInputManager) getSystemService(TV_INPUT_SERVICE);
+    if (inputsManager != null)
+      try {
+        inputsManager.registerCallback(inputsChanged, main);
+      } catch (RuntimeException unavailable) {
+        inputsManager = null;
+      }
     home.setActive(true);
     refreshLibrary();
     loadHome();
@@ -645,6 +850,13 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
     appSearch.cancel();
     network.cancelAll();
     recommendationRefresh.stop();
+    if (inputsManager != null) {
+      try {
+        inputsManager.unregisterCallback(inputsChanged);
+      } catch (RuntimeException ignored) {
+      }
+      inputsManager = null;
+    }
     cancelLibrary();
     libraryGeneration++;
     catalogGeneration++;

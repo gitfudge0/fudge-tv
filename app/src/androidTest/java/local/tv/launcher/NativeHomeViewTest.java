@@ -37,39 +37,7 @@ public class NativeHomeViewTest {
   }
 
   private void awaitStartupFocus() {
-    long deadline = android.os.SystemClock.uptimeMillis() + 3000;
-    AtomicReference<String> diagnostic = new AtomicReference<>("not inspected");
-    java.util.concurrent.atomic.AtomicBoolean ready =
-        new java.util.concurrent.atomic.AtomicBoolean();
-    do {
-      instrumentation.runOnMainSync(
-          () -> {
-            View target = activity.home.findViewById(R.id.hero_open);
-            View current = activity.home.findFocus();
-            ready.set(target != null && target.hasFocus() && target.hasWindowFocus());
-            diagnostic.set(
-                "window="
-                    + activity.home.hasWindowFocus()
-                    + ", touchMode="
-                    + activity.home.isInTouchMode()
-                    + ", attached="
-                    + (target != null && target.isAttachedToWindow())
-                    + ", focusable="
-                    + (target != null && target.isFocusable())
-                    + ", current="
-                    + (current == null
-                        ? "none"
-                        : current.getClass().getName() + ":" + current.getId()));
-          });
-      if (ready.get()) {
-        android.os.Bundle evidence = new android.os.Bundle();
-        evidence.putString("nativeUiStartup", diagnostic.get());
-        instrumentation.sendStatus(0, evidence);
-        return;
-      }
-      android.os.SystemClock.sleep(16);
-    } while (android.os.SystemClock.uptimeMillis() < deadline);
-    fail("Gallery startup focus deadline exceeded: " + diagnostic.get());
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "watch:0");
   }
 
   @After
@@ -121,19 +89,25 @@ public class NativeHomeViewTest {
   }
 
   @Test
-  public void homeUsesRecycledNativeRowsAndStartsAtGalleryAction() {
+  public void homeUsesRecycledNativeRowsAndStartsAtContinueWatching() {
     main(
         () -> {
-          assertNotNull(activity.home.findViewById(R.id.hero_open));
-          assertTrue(activity.home.findViewById(R.id.hero_open).hasFocus());
+          assertNotNull(activity.home.findViewById(R.id.home_wallpaper));
+          assertTrue(
+              activity
+                  .home
+                  .findFocus()
+                  .getContentDescription()
+                  .toString()
+                  .startsWith("Shared title 0"));
           assertTrue(count(activity.home, RecyclerView.class) >= 2);
           RecyclerView rows = activity.home.findViewById(R.id.home_rows);
           assertEquals(5, rows.getAdapter().getItemCount());
           assertEquals(
               "Continue Watching",
-              ((NativeRowAdapter) rows.getAdapter()).getCurrentList().get(1).title);
+              ((NativeRowAdapter) rows.getAdapter()).getCurrentList().get(0).title);
           assertEquals(
-              12, ((NativeRowAdapter) rows.getAdapter()).getCurrentList().get(1).cards.size());
+              12, ((NativeRowAdapter) rows.getAdapter()).getCurrentList().get(0).cards.size());
           assertTrue(
               "Only visible cards are allocated",
               count(activity.home, android.widget.ImageView.class) < 40);
@@ -168,31 +142,47 @@ public class NativeHomeViewTest {
   }
 
   @Test
-  public void recommendationRowsShowAppLabelsAndOwnerStableIdentity() {
+  public void recommendationsUseOnlyTheHighlightedAppsProviderIdentity() {
+    RecyclerView recommendationsRow =
+        NativeUiTestDriver.reachProviderRow(instrumentation, activity);
+    AtomicReference<View> outgoingArtwork = new AtomicReference<>();
     main(
-        () -> {
-          Library.Snapshot data = NativeUiTestActivity.fixtureSnapshot();
-          Library.Channel row = data.channels.get(0);
-          row.id = "app:com.apple.atve.sony.appletv";
-          row.owner = "com.apple.atve.sony.appletv";
-          row.title = "Apple TV";
-          activity.home.renderSnapshot(data);
-        });
+        () ->
+            outgoingArtwork.set(
+                ((NativeCardAdapter.Holder)
+                        recommendationsRow.findContainingViewHolder(activity.home.findFocus()))
+                    .artwork));
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT);
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "published:1");
+    main(
+        () ->
+            assertNull(
+                "Outgoing focus outline must clear immediately",
+                outgoingArtwork.get().getForeground()));
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP);
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "app:fixture.app0");
+    main(() -> assertTrue(activity.home.findFocus().isSelected()));
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT);
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "app:fixture.app1");
     waitMs(150);
     main(
         () -> {
-          RecyclerView rows = activity.home.findViewById(R.id.home_rows);
-          NativeRowAdapter adapter = (NativeRowAdapter) rows.getAdapter();
-          int count = 0;
-          for (NativeRowAdapter.Row row : adapter.getCurrentList()) {
-            if ("channel:app:com.apple.atve.sony.appletv".equals(row.id)) {
-              count++;
-              assertEquals("Apple TV", row.title);
-              assertEquals(24, row.cards.size());
-            }
-          }
-          assertEquals(1, count);
+          NativeRowAdapter rows =
+              (NativeRowAdapter)
+                  ((RecyclerView) activity.home.findViewById(R.id.home_rows)).getAdapter();
+          NativeRowAdapter.Row recommendations = rows.getCurrentList().get(2);
+          assertEquals("Recommendations", recommendations.title);
+          assertTrue(recommendations.cards.isEmpty());
+          assertEquals("No recommendations shared by App 1.", recommendations.subtitle);
         });
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "movie:tt1000000");
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP);
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "app:fixture.app1");
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_LEFT);
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "app:fixture.app0");
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "published:1");
   }
 
   @Test
@@ -266,9 +256,9 @@ public class NativeHomeViewTest {
 
   @Test
   public void detailRefreshPreservesFocusedActionAndClosingCancelsRequest() {
-    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT);
-    instrumentation.waitForIdleSync();
-    main(() -> assertTrue(activity.home.findViewById(R.id.hero_more).hasFocus()));
+    NativeUiTestDriver.reachProviderRow(instrumentation, activity);
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "movie:tt1000000");
     instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER);
     instrumentation.waitForIdleSync();
     android.view.accessibility.AccessibilityNodeInfo before = activeFocus();
@@ -304,7 +294,7 @@ public class NativeHomeViewTest {
         () -> {
           activity.home.handleBack();
           assertEquals(1, activity.detailCancellations);
-          assertTrue(activity.home.findViewById(R.id.hero_more).hasFocus());
+          assertEquals("movie:tt1000000", NativeUiTestDriver.identity(activity.home.findFocus()));
         });
   }
 
@@ -325,55 +315,52 @@ public class NativeHomeViewTest {
             throw new AssertionError(e);
           }
           activity.home.showHome();
-          activity.home.findViewById(R.id.hero_open).performClick();
-          assertEquals("movie:tt1000000", activity.openedTitle.optString("key"));
+          activity.home.findViewById(R.id.nav_home).performClick();
         });
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "watch:0");
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER);
+    main(() -> assertEquals("watch:0", activity.resumes.get(0)));
   }
 
   @Test
-  public void dpadTraversesGalleryNavigationSelectorsAndSharedWatchRow() {
+  public void dpadTraversesHeaderAndContinueWatchingAndActivatesRealProgram() {
     instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP);
-    instrumentation.waitForIdleSync();
-    main(() -> assertTrue(activity.home.findViewById(R.id.nav_home).hasFocus()));
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "home");
     instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
-    instrumentation.waitForIdleSync();
-    main(() -> assertTrue(activity.home.findViewById(R.id.hero_open).hasFocus()));
-    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
-    instrumentation.waitForIdleSync();
-    main(() -> assertTrue(activity.home.findViewById(R.id.feature_selectors).hasFocus()));
-    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
-    waitMs(250);
-    main(
-        () -> {
-          View focused = activity.home.findFocus();
-          assertNotNull(focused);
-          assertTrue(focused.getContentDescription().toString().startsWith("Shared title"));
-        });
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "watch:0");
     instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER);
     instrumentation.waitForIdleSync();
     main(() -> assertEquals("watch:0", activity.resumes.get(0)));
   }
 
   @Test
-  public void carouselDescriptionHeightStaysFixedAndSelectorsPauseRotation() {
+  public void fixedWallpaperFramesMountainsAboveInitialContentAndHeaderIsCompact() {
     main(
         () -> {
-          TextView description = activity.home.findViewById(R.id.hero_description);
-          int height = description.getHeight();
-          ViewGroup dots = activity.home.findViewById(R.id.feature_selectors);
-          dots.getChildAt(1).performClick();
-          assertEquals(height, description.getHeight());
+          android.widget.ImageView wallpaper = activity.home.findViewById(R.id.home_wallpaper);
+          assertEquals(android.widget.ImageView.ScaleType.MATRIX, wallpaper.getScaleType());
+          float[] point = {
+            wallpaper.getDrawable().getIntrinsicWidth() / 2f,
+            wallpaper.getDrawable().getIntrinsicHeight() * .46f
+          };
+          wallpaper.getImageMatrix().mapPoints(point);
+          assertEquals(wallpaper.getHeight() * .24f, point[1], 2f);
+          RecyclerView rows = activity.home.findViewById(R.id.home_rows);
+          NativeRowAdapter.Holder first =
+              (NativeRowAdapter.Holder) rows.findViewHolderForAdapterPosition(0);
+          int[] title = new int[2];
+          first.title.getLocationOnScreen(title);
+          assertEquals(activity.home.getHeight() * .30f, title[1], 3f);
+          ViewGroup header = activity.home.findViewById(R.id.home_header);
+          assertEquals(3, header.getChildCount());
+          NativeUi coordinates = new NativeUi(activity);
           assertEquals(
-              "Fixture title 1",
-              ((TextView) activity.home.findViewById(R.id.hero_title)).getText().toString());
-          dots.getChildAt(1).requestFocus();
+              coordinates.px(5) * 2 + coordinates.px(44) * 3 + coordinates.px(6) * 2,
+              header.getWidth());
+          assertEquals("Home", activity.home.findViewById(R.id.nav_home).getContentDescription());
+          assertEquals(
+              "", ((TextView) activity.home.findViewById(R.id.nav_home)).getText().toString());
         });
-    waitMs(8200);
-    main(
-        () ->
-            assertEquals(
-                "Fixture title 1",
-                ((TextView) activity.home.findViewById(R.id.hero_title)).getText().toString()));
   }
 
   @Test
@@ -398,31 +385,26 @@ public class NativeHomeViewTest {
   }
 
   @Test
-  public void recycledProviderRowsKeepTheirOwnScrollAndFocusAfterRefresh() {
+  public void recycledRowsRetainIndependentOffsetsWithContextualStateKeys() {
+    AtomicReference<NativeRowAdapter> adapterRef = new AtomicReference<>();
     main(
         () -> {
-          Library.Snapshot data = NativeUiTestActivity.fixtureSnapshot();
-          Library.Channel source = data.channels.get(0);
-          data.channels.clear();
-          for (int i = 0; i < 24; i++) {
-            Library.Channel channel = new Library.Channel();
-            channel.id = "many:" + i;
-            channel.title = "Provider " + i;
-            channel.owner = "Fixture app";
-            channel.programs.addAll(source.programs);
-            data.channels.add(channel);
-          }
-          activity.home.renderSnapshot(data);
+          NativeRowAdapter adapter =
+              new NativeRowAdapter(new NativeUi(activity), activity.images, null, card -> {});
+          adapterRef.set(adapter);
           RecyclerView vertical = activity.home.findViewById(R.id.home_rows);
+          vertical.setAdapter(adapter);
           vertical.setItemViewCacheSize(0);
-          vertical.getRecycledViewPool().setMaxRecycledViews(NativeCard.Kind.POSTER.ordinal(), 1);
+          vertical
+              .getRecycledViewPool()
+              .setMaxRecycledViews(NativeCard.Kind.RECOMMENDATION.ordinal(), 1);
+          adapter.submitList(recycledFixtureRows(false));
         });
     waitMs(200);
     java.util.Set<RecyclerView.ViewHolder> seen =
         java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
     boolean reused = false;
-    // Every visible holder is deliberately offset. A fresh logical row must still start at zero.
-    for (int position = 3; position < 23; position++) {
+    for (int position = 0; position < 20; position++) {
       final int index = position;
       main(
           () ->
@@ -440,7 +422,7 @@ public class NativeHomeViewTest {
             androidx.recyclerview.widget.LinearLayoutManager layout =
                 (androidx.recyclerview.widget.LinearLayoutManager) horizontal.getLayoutManager();
             assertEquals(
-                "Fresh logical row " + index + " inherited another provider's offset",
+                "Fresh logical row inherited another row's offset",
                 0,
                 layout.findFirstVisibleItemPosition());
             layout.scrollToPositionWithOffset(15, 0);
@@ -448,57 +430,146 @@ public class NativeHomeViewTest {
       reused |= repeated[0];
       waitMs(80);
     }
-    assertTrue("Workload must actually reuse at least one native row holder", reused);
-    main(() -> ((RecyclerView) activity.home.findViewById(R.id.home_rows)).scrollToPosition(3));
+    assertTrue("Workload must reuse a native row holder", reused);
+    main(() -> ((RecyclerView) activity.home.findViewById(R.id.home_rows)).scrollToPosition(0));
     waitMs(200);
     main(
         () -> {
           RecyclerView vertical = activity.home.findViewById(R.id.home_rows);
           NativeRowAdapter.Holder holder =
-              (NativeRowAdapter.Holder) vertical.findViewHolderForAdapterPosition(3);
+              (NativeRowAdapter.Holder) vertical.findViewHolderForAdapterPosition(0);
           RecyclerView horizontal = (RecyclerView) ((ViewGroup) holder.itemView).getChildAt(2);
           assertEquals(
-              "Returning to the first provider restores its own position",
               15,
               ((androidx.recyclerview.widget.LinearLayoutManager) horizontal.getLayoutManager())
                   .findFirstVisibleItemPosition());
-          RecyclerView.ViewHolder card = horizontal.findViewHolderForAdapterPosition(15);
-          assertNotNull(card);
-          card.itemView.requestFocus();
-          // Change values with the same IDs so AsyncListDiffer really commits a new card list.
-          Library.Snapshot updated = NativeUiTestActivity.fixtureSnapshot();
-          java.util.List<Library.Program> originals =
-              new java.util.ArrayList<>(updated.channels.get(0).programs);
-          for (int i = 0; i < 24; i++) {
-            Library.Channel channel = new Library.Channel();
-            channel.id = "many:" + i;
-            channel.title = "Provider " + i;
-            channel.owner = "Fixture app";
-            for (Library.Program original : originals) {
-              Library.Program program = new Library.Program();
-              program.id = original.id;
-              program.title = original.title + " refreshed";
-              program.owner = original.owner;
-              program.art = original.art;
-              channel.programs.add(program);
-            }
-            if (i == 0) updated.channels.set(0, channel);
-            else updated.channels.add(channel);
-          }
-          activity.home.renderSnapshot(updated);
+          horizontal.findViewHolderForAdapterPosition(15).itemView.requestFocus();
+          adapterRef.get().submitList(recycledFixtureRows(true));
         });
     waitMs(300);
     main(
+        () ->
+            assertTrue(
+                activity
+                    .home
+                    .findFocus()
+                    .getContentDescription()
+                    .toString()
+                    .startsWith("Published title 15 refreshed")));
+  }
+
+  private static java.util.List<NativeRowAdapter.Row> recycledFixtureRows(boolean refreshed) {
+    java.util.List<NativeRowAdapter.Row> rows = new java.util.ArrayList<>();
+    java.util.List<NativeCard> cards = new java.util.ArrayList<>();
+    for (Library.Program program :
+        NativeUiTestActivity.fixtureSnapshot().channels.get(0).programs) {
+      if (refreshed) program.title += " refreshed";
+      cards.add(NativeCard.recommendation(program));
+    }
+    for (int i = 0; i < 24; i++)
+      rows.add(
+          new NativeRowAdapter.Row(
+              "test-row:" + i,
+              "Provider " + i,
+              "",
+              NativeCard.Kind.RECOMMENDATION,
+              cards,
+              "test-state:" + i));
+    return rows;
+  }
+
+  @Test
+  public void rapidAppSwitchAndReorderKeepRecommendationsWithTheirApp() {
+    main(
         () -> {
-          View focused = activity.home.findFocus();
-          assertNotNull(focused);
-          assertTrue(
-              "Refresh must retain the actual focused program",
-              focused
-                  .getContentDescription()
-                  .toString()
-                  .startsWith("Published title 15 refreshed"));
+          Library.Snapshot data = twoAppSnapshot();
+          activity.home.renderSnapshot(data);
         });
+    NativeUiTestDriver.reachProviderRow(instrumentation, activity);
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT);
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "published:1");
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP);
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "app:fixture.app0");
+    // App focus and Down happen before the async vertical/card diffs can commit.
+    main(
+        () -> {
+          RecyclerView apps = (RecyclerView) activity.home.findFocus().getParent();
+          apps.findViewHolderForAdapterPosition(1).itemView.requestFocus();
+          activity.home.dispatchKeyEvent(
+              new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_DOWN));
+          activity.home.dispatchKeyEvent(
+              new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_DOWN));
+        });
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "second:0");
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT);
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "second:1");
+    main(
+        () -> {
+          Library.Snapshot data = twoAppSnapshot();
+          java.util.Collections.swap(data.apps, 0, 1);
+          activity.home.renderSnapshot(data);
+        });
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "second:1");
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP);
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "app:fixture.app1");
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT);
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "app:fixture.app0");
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "published:1");
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP);
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "app:fixture.app0");
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_LEFT);
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "app:fixture.app1");
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "second:1");
+  }
+
+  private static Library.Snapshot twoAppSnapshot() {
+    Library.Snapshot data = NativeUiTestActivity.fixtureSnapshot();
+    Library.Channel channel = new Library.Channel();
+    channel.id = "second";
+    channel.owner = "fixture.app1";
+    channel.title = "Second app";
+    for (int i = 0; i < 8; i++) {
+      Library.Program program = new Library.Program();
+      program.id = "second:" + i;
+      program.title = "Second title " + i;
+      program.owner = channel.owner;
+      program.art = "https://images.metahub.space/fixture.jpg";
+      channel.programs.add(program);
+    }
+    data.channels.add(channel);
+    return data;
+  }
+
+  @Test
+  public void contextualRecommendationsRefreshAndRemovedAppFallsBackSafely() {
+    NativeUiTestDriver.reachProviderRow(instrumentation, activity);
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT);
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "published:1");
+    main(
+        () -> {
+          Library.Snapshot data = NativeUiTestActivity.fixtureSnapshot();
+          data.channels.get(0).programs.get(1).title = "Updated provider title";
+          activity.home.renderSnapshot(data);
+        });
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "published:1");
+    waitMs(100);
+    main(
+        () -> {
+          RecyclerView row = (RecyclerView) activity.home.findFocus().getParent();
+          NativeCardAdapter.Holder focused =
+              (NativeCardAdapter.Holder) row.findContainingViewHolder(activity.home.findFocus());
+          assertEquals("Updated provider title", focused.title.getText().toString());
+          assertEquals(
+              16f / 9, focused.artwork.getWidth() / (float) focused.artwork.getHeight(), .02f);
+          Library.Snapshot data = NativeUiTestActivity.fixtureSnapshot();
+          data.apps.remove(0);
+          activity.home.renderSnapshot(data);
+        });
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "app:fixture.app1");
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "movie:tt1000000");
   }
 
   @Test
@@ -542,15 +613,11 @@ public class NativeHomeViewTest {
 
   @Test
   public void rapidVerticalReversalUsesPendingRowsAndRestoresTheirPreferredCard() {
-    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
-    instrumentation.waitForIdleSync();
-    NativeUiTestDriver.awaitFocus(instrumentation, activity, "selector");
     // Dispatch a burst in one native UI turn, before newly requested rows can finish layout.
     main(
         () -> {
           for (int key :
               new int[] {
-                KeyEvent.KEYCODE_DPAD_DOWN,
                 KeyEvent.KEYCODE_DPAD_DOWN,
                 KeyEvent.KEYCODE_DPAD_DOWN,
                 KeyEvent.KEYCODE_DPAD_UP,
@@ -576,7 +643,7 @@ public class NativeHomeViewTest {
                 new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_UP));
           }
         });
-    NativeUiTestDriver.awaitFocus(instrumentation, activity, "selector");
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "home");
   }
 
   @Test
@@ -590,12 +657,12 @@ public class NativeHomeViewTest {
           for (Library.App app : data.apps) app.launch = null;
           activity.home.renderSnapshot(data);
         });
-    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
-    NativeUiTestDriver.awaitFocus(instrumentation, activity, "selector");
+    main(() -> activity.home.findViewById(R.id.nav_home).requestFocus());
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "home");
     instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
     NativeUiTestDriver.awaitFocus(instrumentation, activity, "movie:tt1000000");
     instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP);
-    NativeUiTestDriver.awaitFocus(instrumentation, activity, "selector");
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "home");
     main(
         () -> {
           RecyclerView rows = activity.home.findViewById(R.id.home_rows);
@@ -618,14 +685,8 @@ public class NativeHomeViewTest {
 
   @Test
   public void pendingRowRefreshFallsBackWhenPreferredAppBecomesDisabled() {
-    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
-    NativeUiTestDriver.awaitFocus(instrumentation, activity, "selector");
     main(
         () -> {
-          activity.home.dispatchKeyEvent(
-              new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_DOWN));
-          activity.home.dispatchKeyEvent(
-              new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_DOWN));
           activity.home.dispatchKeyEvent(
               new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_DOWN));
           activity.home.dispatchKeyEvent(
@@ -636,13 +697,13 @@ public class NativeHomeViewTest {
         });
     NativeUiTestDriver.awaitFocus(instrumentation, activity, "app:fixture.app1");
     instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
-    NativeUiTestDriver.awaitFocus(instrumentation, activity, "published:0");
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "movie:tt1000000");
     instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP);
     NativeUiTestDriver.awaitFocus(instrumentation, activity, "app:fixture.app1");
   }
 
   @Test
-  public void unavailableFeaturedCatalogStillNavigatesBetweenGalleryAndSharedRows() {
+  public void unavailableCatalogStillNavigatesBetweenHeaderAndSharedRows() {
     main(
         () -> {
           try {
@@ -655,11 +716,11 @@ public class NativeHomeViewTest {
             throw new AssertionError(e);
           }
         });
-    NativeUiTestDriver.awaitFocus(instrumentation, activity, "gallery");
-    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
     NativeUiTestDriver.awaitFocus(instrumentation, activity, "watch:0");
     instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP);
-    NativeUiTestDriver.awaitFocus(instrumentation, activity, "gallery");
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "home");
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "watch:0");
   }
 
   @Test
@@ -711,7 +772,7 @@ public class NativeHomeViewTest {
           assertTrue(search.isSelected());
           activity.home.showHome();
           assertTrue(home.isSelected());
-          assertTrue(home.hasFocus());
+          home.requestFocus();
           android.graphics.Bitmap focus =
               android.graphics.Bitmap.createBitmap(
                   home.getWidth(), home.getHeight(), android.graphics.Bitmap.Config.ARGB_8888);
@@ -802,63 +863,143 @@ public class NativeHomeViewTest {
   }
 
   @Test
-  public void offscreenRowAndHeaderScrollContinuouslyInsideNavSafeViewport() {
-    java.util.List<Integer> deltas = new java.util.ArrayList<>();
-    AtomicReference<RecyclerView> rowsRef = new AtomicReference<>();
+  public void appsAndPostersKeepOriginalFocusGeometryAndInputsUseSingleLineLabels() {
     main(
         () -> {
           NativeUi ui = new NativeUi(activity);
-          View gallery = activity.home.findViewById(R.id.hero_open);
-          int[] position = new int[2];
-          gallery.getLocationOnScreen(position);
-          assertEquals(
-              "The clipped viewport preserves the original gallery action position",
-              ui.px(734),
-              position[1]);
-          RecyclerView rows = activity.home.findViewById(R.id.home_rows);
-          rowsRef.set(rows);
-          assertEquals(ui.px(100), rows.getTop());
-          assertTrue(rows.getClipChildren());
-          Library.Snapshot data = NativeUiTestActivity.fixtureSnapshot();
-          data.programs.clear();
-          data.channels.clear();
-          data.programStatus = "Provider history unavailable.";
-          for (Library.App app : data.apps) app.launch = null;
-          activity.home.renderSnapshot(data);
-          rows.addOnScrollListener(
-              new RecyclerView.OnScrollListener() {
-                @Override
-                public void onScrolled(RecyclerView recycler, int dx, int dy) {
-                  if (dy != 0) deltas.add(dy);
-                }
-              });
+          NativeRowAdapter rows = new NativeRowAdapter(ui, activity.images, null, card -> {});
+          RecyclerView parent = new RecyclerView(activity);
+          for (NativeCard.Kind kind :
+              new NativeCard.Kind[] {
+                NativeCard.Kind.APP, NativeCard.Kind.POSTER, NativeCard.Kind.INPUT
+              }) {
+            NativeRowAdapter.Holder section = rows.onCreateViewHolder(parent, kind.ordinal());
+            java.util.List<NativeCard> cards = new java.util.ArrayList<>();
+            for (int i = 0; i < 2; i++)
+              cards.add(
+                  new NativeCard(
+                      "geometry:" + kind + i,
+                      "Actual device or content title",
+                      "HDMI 3 · Connected",
+                      "",
+                      "",
+                      kind,
+                      null,
+                      null,
+                      true,
+                      -1));
+            section.cards.setInstant(true);
+            section.cards.submitList(cards);
+            View view = section.itemView;
+            view.measure(
+                View.MeasureSpec.makeMeasureSpec(ui.px(1700), View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+            view.layout(0, 0, view.getMeasuredWidth(), view.getMeasuredHeight());
+            RecyclerView rail = (RecyclerView) ((ViewGroup) view).getChildAt(2);
+            NativeCardAdapter.Holder first =
+                (NativeCardAdapter.Holder) rail.findViewHolderForAdapterPosition(0);
+            NativeCardAdapter.Holder second =
+                (NativeCardAdapter.Holder) rail.findViewHolderForAdapterPosition(1);
+            assertNotNull(first);
+            assertNotNull(second);
+            if (kind == NativeCard.Kind.INPUT) {
+              assertEquals(ui.px(300), first.artwork.getWidth());
+              assertEquals(ui.px(105), first.artwork.getHeight());
+              assertEquals(first.artwork, first.title.getParent());
+              assertEquals(1, first.title.getMaxLines());
+              assertEquals(View.GONE, first.subtitle.getVisibility());
+              assertTrue(
+                  first.itemView.getContentDescription().toString().contains("HDMI 3 · Connected"));
+            } else {
+              assertEquals(
+                  ui.px(kind == NativeCard.Kind.APP ? 220 : 200), first.artwork.getWidth());
+              assertEquals(
+                  ui.px(kind == NativeCard.Kind.APP ? 124 : 300), first.artwork.getHeight());
+              assertEquals(first.itemView, first.title.getParent());
+              assertTrue(first.title.getTop() > first.artwork.getBottom());
+              assertEquals(0f, first.artwork.getPivotX(), .01f);
+              first.itemView.requestFocus();
+              assertEquals(
+                  kind == NativeCard.Kind.APP ? 290f / 220 : 1.25f,
+                  first.artwork.getScaleX(),
+                  .001f);
+              assertEquals(
+                  ui.px(kind == NativeCard.Kind.APP ? 70 : 50),
+                  second.itemView.getTranslationX(),
+                  1f);
+              assertNull(
+                  "Original app/poster focus uses scale rather than a new white border",
+                  first.artwork.getForeground());
+            }
+          }
+          NativeRowAdapter home =
+              (NativeRowAdapter)
+                  ((RecyclerView) activity.home.findViewById(R.id.home_rows)).getAdapter();
+          assertEquals(NativeCard.Kind.POSTER, home.getCurrentList().get(3).kind);
         });
-    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
-    NativeUiTestDriver.awaitFocus(instrumentation, activity, "selector");
-    main(deltas::clear);
+  }
+
+  @Test
+  public void discoveredInputLabelsAndStatusReachTheInputActivationListener() {
+    main(
+        () -> {
+          Library.Snapshot snapshot = NativeUiTestActivity.fixtureSnapshot();
+          snapshot.inputs.add(
+              new TvInputs.Entry(
+                  "fixture/real-input",
+                  "Living-room receiver",
+                  "HDMI 2",
+                  android.media.tv.TvInputManager.INPUT_STATE_CONNECTED));
+          activity.home.renderSnapshot(snapshot);
+        });
+    NativeUiTestDriver.reachProviderRow(instrumentation, activity);
     instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
     NativeUiTestDriver.awaitFocus(instrumentation, activity, "movie:tt1000000");
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "input:fixture/real-input");
     main(
         () -> {
-          assertContinuousScroll(deltas);
-          assertVisibleTextBelowNavigation(rowsRef.get(), new NativeUi(activity).px(100));
-          View focus = activity.home.findFocus();
-          android.graphics.Rect bounds = new android.graphics.Rect();
-          assertTrue(focus.getGlobalVisibleRect(bounds));
+          String description = activity.home.findFocus().getContentDescription().toString();
+          assertTrue(description.contains("Living-room receiver"));
+          assertTrue(description.contains("HDMI 2"));
+          assertTrue(description.contains("Connected"));
+        });
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER);
+    main(() -> assertEquals("input:fixture/real-input", activity.launches.get(0)));
+  }
+
+  @Test
+  public void inputsFallbackActionsAreReachableAndWallpaperStaysFixedWhileRowsScroll() {
+    android.graphics.Matrix before = new android.graphics.Matrix();
+    main(
+        () ->
+            before.set(
+                ((android.widget.ImageView) activity.home.findViewById(R.id.home_wallpaper))
+                    .getImageMatrix()));
+    NativeUiTestDriver.reachProviderRow(instrumentation, activity);
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "movie:tt1000000");
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "control:input-menu");
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER);
+    main(
+        () -> {
+          assertEquals("input:null", activity.launches.get(0));
           assertEquals(
-              "Focused card must fit the clipped viewport", focus.getHeight(), bounds.height());
-          deltas.clear();
+              before,
+              ((android.widget.ImageView) activity.home.findViewById(R.id.home_wallpaper))
+                  .getImageMatrix());
+          int[] header = new int[2];
+          activity.home.findViewById(R.id.home_header).getLocationOnScreen(header);
+          assertEquals(new NativeUi(activity).px(26), header[1]);
+          assertVisibleTextBelowNavigation(
+              activity.home.findViewById(R.id.home_rows),
+              Math.round(activity.home.getHeight() * .15f));
         });
-    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP);
-    NativeUiTestDriver.awaitFocus(instrumentation, activity, "selector");
-    main(
-        () -> {
-          assertContinuousScroll(deltas);
-          int[] position = new int[2];
-          activity.home.findViewById(R.id.hero_open).getLocationOnScreen(position);
-          assertEquals(new NativeUi(activity).px(734), position[1]);
-          assertVisibleTextBelowNavigation(rowsRef.get(), new NativeUi(activity).px(100));
-        });
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT);
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "control:system-settings");
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER);
+    main(() -> assertEquals("system-settings", activity.launches.get(1)));
   }
 
   private static void assertContinuousScroll(java.util.List<Integer> deltas) {

@@ -59,6 +59,50 @@ public class RecommendationsTest {
     e.commit();
   }
 
+  @Test
+  public void watchNextIsDeliveredBeforeAnyPreviewChannelQuery() {
+    Library.Snapshot out = snapshot(true);
+    List<String> order = new ArrayList<>();
+    Library.Snapshot[] delivered = new Library.Snapshot[1];
+    Recommendations.Source source =
+        new Recommendations.Source() {
+          public boolean available() {
+            return true;
+          }
+
+          public Cursor query(Uri uri, CancellationSignal signal) {
+            if (uri.equals(TvContract.WatchNextPrograms.CONTENT_URI)) {
+              order.add("watch-query");
+              return programs(0);
+            }
+            if (uri.equals(TvContract.Channels.CONTENT_URI)) {
+              order.add("channels-query");
+              assertEquals(
+                  Arrays.asList("watch-query", "watch-delivered", "channels-query"), order);
+              return channels();
+            }
+            return programs(1);
+          }
+        };
+    Recommendations.load(
+        context,
+        out,
+        null,
+        source,
+        () -> {
+          assertEquals(Collections.singletonList("watch-query"), order);
+          assertFalse(
+              "Watch Next must already contain real mapped records", out.programs.isEmpty());
+          assertTrue(out.channels.isEmpty());
+          delivered[0] = Library.copy(out);
+          order.add("watch-delivered");
+        });
+    assertFalse(out.channels.isEmpty());
+    assertTrue(
+        "A delivered stage must not acquire subsequently loaded channels",
+        delivered[0].channels.isEmpty());
+  }
+
   private Library.Snapshot snapshot(boolean installed) {
     Library.Snapshot result = new Library.Snapshot();
     if (installed) result.allApps.add(new Library.App(owner, "Test", null));

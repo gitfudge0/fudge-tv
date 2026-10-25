@@ -43,6 +43,7 @@ public class NativeUiTestActivity extends Activity implements NativeHomeView.Lis
 
   static Library.Snapshot fixtureSnapshot() {
     Library.Snapshot snapshot = new Library.Snapshot();
+    snapshot.channelCapability = "available";
     for (int i = 0; i < 7; i++) {
       Library.App app =
           new Library.App(
@@ -55,7 +56,7 @@ public class NativeUiTestActivity extends Activity implements NativeHomeView.Lis
       Library.Program p = new Library.Program();
       p.id = "watch:" + i;
       p.title = "Shared title " + i;
-      p.owner = "Fixture app";
+      p.owner = "fixture.app0";
       p.season = "1";
       p.episode = String.valueOf(i + 1);
       p.resumable = true;
@@ -67,12 +68,12 @@ public class NativeUiTestActivity extends Activity implements NativeHomeView.Lis
     Library.Channel channel = new Library.Channel();
     channel.id = "fixture";
     channel.title = "Fixture recommendations";
-    channel.owner = "Fixture app";
+    channel.owner = "fixture.app0";
     for (int i = 0; i < 24; i++) {
       Library.Program p = new Library.Program();
       p.id = "published:" + i;
       p.title = "Published title " + i;
-      p.owner = "Fixture app";
+      p.owner = "fixture.app0";
       p.art = "https://images.metahub.space/fixture.jpg";
       channel.programs.add(p);
     }
@@ -164,5 +165,17 @@ public class NativeUiTestActivity extends Activity implements NativeHomeView.Lis
     home.release();
     images.close();
     super.onDestroy();
+  }
+
+  public void onInput(String id) {
+    launches.add("input:" + id);
+  }
+
+  public void onSystemHome() {
+    launches.add("system-home");
+  }
+
+  public void onSystemSettings() {
+    launches.add("system-settings");
   }
 }

@@ -4,7 +4,7 @@
 
 The official public add-on is `https://v3-cinemeta.strem.io`. The earlier provider inspection recorded manifest version 3.0.14 on 2026-10-25. `movie` and `series` resources use IMDb IDs beginning with `tt`; that inspection is historical contract evidence, not a claim that a later checkout has run the live test.
 
-`top` supplies Popular catalogs and accepts title search/genre filters. `imdbRating` supplies Featured catalogs. Home interleaves Popular movie/series results into at most 24 entries and Featured results into four gallery entries. Exact genre searches use known manifest names. Catalog matches do not establish regional availability, subscriptions, or playable streams.
+`top` supplies Popular catalogs and accepts title search/genre filters. Home interleaves Popular movie/series results into at most 24 Discover entries. The native home has no featured carousel and does not request the former `imdbRating` gallery catalogs; older cached envelopes remain readable. Exact genre searches use known manifest names. Catalog matches do not establish regional availability, subscriptions, or playable streams.
 
 `CatalogClient` normalizes provider JSON for native views; there is no web bridge. `MainActivity` coordinates native lifecycle/request lanes, and `NativeHomeView`/RecyclerView adapters render the results. Continue Watching retains provider-owned descriptions and artwork without cross-provider enrichment. Weather/geocoding and the former web presentation are removed.
 

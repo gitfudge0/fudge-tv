@@ -12,7 +12,9 @@ final class NativeCard {
     APP,
     WATCH,
     POSTER,
-    ACTION
+    ACTION,
+    RECOMMENDATION,
+    INPUT
   }
 
   final String id, title, subtitle, art, description;
@@ -81,6 +83,40 @@ final class NativeCard {
         null,
         true,
         progress);
+  }
+
+  static NativeCard recommendation(Library.Program p) {
+    NativeCard card = program(p, false);
+    return new NativeCard(
+        card.id,
+        card.title,
+        card.subtitle,
+        card.art,
+        card.description,
+        Kind.RECOMMENDATION,
+        null,
+        null,
+        card.enabled,
+        -1);
+  }
+
+  static NativeCard input(TvInputs.Entry input) {
+    return new NativeCard(
+        "input:" + input.id,
+        input.label,
+        input.portLabel.isEmpty() ? input.status : input.portLabel + " · " + input.status,
+        "",
+        "",
+        Kind.INPUT,
+        null,
+        null,
+        true,
+        -1);
+  }
+
+  static NativeCard control(String id, String title, String subtitle) {
+    return new NativeCard(
+        "control:" + id, title, subtitle, "", "", Kind.INPUT, null, null, true, -1);
   }
 
   static NativeCard title(JSONObject item) {

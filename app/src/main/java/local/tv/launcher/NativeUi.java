@@ -68,13 +68,19 @@ final class NativeUi {
   Button navButton(int icon, String label, Runnable click) {
     Button button = button("", click);
     button.setContentDescription(label);
-    button.setForeground(new NativeNavIcon(icon));
+    // Scope the original compact glyph size to navigation; input-card icons stay large.
+    button.setForeground(
+        new android.graphics.drawable.InsetDrawable(new NativeNavIcon(icon), px(12)));
     StateListDrawable surface = new StateListDrawable();
     surface.addState(new int[] {android.R.attr.state_focused}, surface(Color.WHITE, 22));
     surface.addState(new int[] {android.R.attr.state_selected}, surface(0x25ffffff, 22));
     surface.addState(new int[0], surface(Color.TRANSPARENT, 22));
     button.setBackground(surface);
-    button.setOnFocusChangeListener((view, focused) -> button.setElevation(focused ? px(7) : 0));
+    button.setOnFocusChangeListener(
+        (view, focused) -> {
+          button.setElevation(focused ? px(7) : 0);
+          button.setTextColor(focused ? BACKGROUND : Color.WHITE);
+        });
     return button;
   }
 
@@ -82,6 +88,12 @@ final class NativeUi {
     GradientDrawable drawable = new GradientDrawable();
     drawable.setColor(color);
     drawable.setCornerRadius(px(radius));
+    return drawable;
+  }
+
+  GradientDrawable focusOutline() {
+    GradientDrawable drawable = surface(Color.TRANSPARENT, 12);
+    drawable.setStroke(px(4), 0xfff0eee9);
     return drawable;
   }
 
