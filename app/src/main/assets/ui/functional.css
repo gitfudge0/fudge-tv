@@ -89,7 +89,7 @@ button.card.tv-focused .card-art{border:0;box-shadow:0 20px 35px #000a}
 .rail button.card.tv-focused{flex-basis:528px;width:528px;transform:none;box-shadow:none}.rail button.card.tv-focused .card-art{height:297px;transform:none;box-shadow:0 18px 34px #0009}
 .home-row .card h3,.rail .card h3{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.home-row .card p,.rail .card p{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:25px}
 /* The material stays fixed while the thumbnail viewport reveals neighboring items. */
-.queue{border-radius:24px;overflow:visible}.queue-material{inset:0}
+.queue{border-radius:24px;overflow:hidden}.queue-material{inset:0}
 @media(min-width:1001px){.queue{width:554px}}
 
 /* One content edge for weather, queue and app artwork. */
@@ -121,10 +121,9 @@ button.card.tv-focused .card-art{border:0;box-shadow:0 20px 35px #000a}
 .home-row button.card,.rail button.card{transition:none}
 .home-row button.card .card-art,.rail button.card .card-art{transition:box-shadow 280ms ease}
 
-/* Only the thumbnail strip overflows the panel; viewport clipping prevents page overflow. */
-.queue-scroll{position:absolute;left:-72px;top:94px;width:calc(100% + 72px + 6vw);height:230px;padding:12px 0 15px;display:block;overflow:hidden;scroll-padding:0}
+/* Keep neighbor previews inside the panel's rounded clipping boundary. */
+.queue-scroll{position:absolute;left:0;top:94px;width:100%;height:230px;padding:12px 0 15px;display:block;overflow:hidden;scroll-padding:0}
 .queue-scroll:after{display:none}
-.queue-track{position:relative;display:flex;gap:15px;width:max-content;padding:0 0 0 100px;transition:transform 150ms cubic-bezier(.2,.8,.2,1);will-change:transform}
-.queue-scroll>.empty{margin:0 6vw 0 100px;padding-top:20px}
+.queue-track{position:relative;display:flex;gap:15px;width:max-content;padding:0 0 0 28px;transition:transform 150ms cubic-bezier(.2,.8,.2,1);will-change:transform}
+.queue-scroll>.empty{margin:0 28px;padding-top:20px}
 @media(min-width:1001px){.hero-copy{width:54%}}
-@media(max-width:1000px){.queue-scroll{left:-30px;width:calc(100% + 30px + 6vw)}.queue-track{padding-left:58px}}
