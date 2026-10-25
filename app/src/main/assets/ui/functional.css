@@ -183,3 +183,5 @@ button{transition-duration:125ms}.backdrop{transition:opacity 375ms,transform 4s
 .home-row,.rail,.home-apps .home-row{box-sizing:border-box;height:var(--row-height);min-height:var(--row-height);max-height:var(--row-height);overflow-y:hidden}
 .home-row .card h3,.rail .card h3{line-height:var(--row-title-height);height:var(--row-title-height)}
 .home-row .card p,.rail .card p{line-height:var(--row-meta-height);height:var(--row-meta-height)}
+/* Carousel descriptions reserve two lines so timed slide changes cannot move the rows. */
+.hero-copy .description{height:60px;min-height:60px;max-height:60px;line-height:30px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
