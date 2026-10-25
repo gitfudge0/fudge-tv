@@ -127,3 +127,7 @@ button.card.tv-focused .card-art{border:0;box-shadow:0 20px 35px #000a}
 .queue-track{position:relative;display:flex;gap:15px;width:max-content;padding:0 0 0 28px;transition:transform 150ms cubic-bezier(.2,.8,.2,1);will-change:transform}
 .queue-scroll>.empty{margin:0 28px;padding-top:20px}
 @media(min-width:1001px){.hero-copy{width:54%}}
+
+/* Action focus and slide selection are separate D-pad rows. */
+#heroCopy .actions button.tv-focused{outline:2px solid #fff;outline-offset:5px;box-shadow:0 10px 30px #0008,0 0 24px #ffffff35}
+.dots .dot.tv-focused{outline:2px solid #fff;outline-offset:5px;transform:scale(1.15);box-shadow:0 0 14px #fff7}

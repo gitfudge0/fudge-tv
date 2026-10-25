@@ -9,17 +9,17 @@ const queue=[{x:1514,y:250,width:266,height:150},{x:1514,y:430,width:266,height:
 assert.equal(nav.nearest(queue[0],queue.slice(1),'down'),0);
 assert.equal(nav.nearest(queue[1],[button,queue[0]],'up'),1);
 console.log('Navigation contracts: 8 passed');
-const rows=['nav','gallery','queue','apps','provider-a','discovery'],counts={nav:3,gallery:1,queue:6,apps:7,'provider-a':5,discovery:24};
-assert.deepEqual(nav.homeStep('gallery',0,'left',rows,counts),{zone:'gallery',index:0,feature:-1});
-assert.deepEqual(nav.homeStep('gallery',0,'right',rows,counts),{zone:'gallery',index:0,feature:1});
-for(const [from,direction,to] of [['gallery','up','nav'],['nav','down','gallery'],['gallery','down','queue'],['queue','down','apps'],['apps','down','provider-a'],['provider-a','down','discovery'],['discovery','up','provider-a'],['provider-a','up','apps'],['apps','up','queue'],['queue','up','gallery']])assert.equal(nav.homeStep(from,0,direction,rows,counts).zone,to);
+const rows=['nav','gallery','features','queue','apps','provider-a','discovery'],counts={nav:3,gallery:2,features:4,queue:6,apps:7,'provider-a':5,discovery:24};
+assert.deepEqual(nav.homeStep('gallery',0,'left',rows,counts),{zone:'gallery',index:0});
+assert.deepEqual(nav.homeStep('gallery',0,'right',rows,counts),{zone:'gallery',index:1});
+for(const [from,direction,to] of [['gallery','up','nav'],['nav','down','gallery'],['gallery','down','features'],['features','down','queue'],['features','up','gallery'],['queue','down','apps'],['apps','down','provider-a'],['provider-a','down','discovery'],['discovery','up','provider-a'],['provider-a','up','apps'],['apps','up','queue'],['queue','up','features']])assert.equal(nav.homeStep(from,0,direction,rows,counts).zone,to);
 assert.equal(nav.homeStep('nav',2,'right',rows,counts).index,2);
 assert.equal(nav.homeStep('apps',0,'left',rows,counts).index,0);
 assert.equal(nav.homeStep('queue',2,'right',rows,counts).index,3);
 const fs=require('node:fs'),path=require('node:path');
 const html=fs.readFileSync(path.join(__dirname,'../app/src/main/assets/ui/index.html'),'utf8'),js=fs.readFileSync(path.join(__dirname,'../app/src/main/assets/ui/app.js'),'utf8');
 assert.match(html,/<div class="weather"/);assert.doesNotMatch(html,/<button[^>]*class="weather"/);
-assert.match(html,/id="heroCopy" tabindex="0"/);assert.match(js,/renderRail\(\);focus\(\$\('#heroCopy'\),false\)/);
+assert.match(html,/id="heroCopy" role="region"/);assert.doesNotMatch(html,/id="heroCopy" tabindex/);assert.match(js,/renderRail\(\);focus\(heroTarget\(\),false\)/);
 assert.ok(html.indexOf('id="homeApps"')<html.indexOf('id="providerRows"')&&html.indexOf('id="providerRows"')<html.indexOf('id="rail"'));
 console.log('Home navigation/startup/content contracts passed');
 const realProgram={id:'watch:owner:42',title:'Actual shared title',description:'Actual published description',art:'https://appassets.androidplatform.net/art/opaque',owner:'Retained app',resumable:true};
@@ -42,3 +42,12 @@ assert.equal(nav.reconcileWatchHero(watchHero,[refreshedProgram]).description,re
 assert.equal(nav.reconcileWatchHero(watchHero,[refreshedProgram]).action,'Open app');
 assert.equal(nav.reconcileWatchHero(watchHero,[]),null);assert.equal(nav.reconcileWatchHero(null,[realProgram]),null);
 console.log('Updated/removed Continue Watching hero reconciliation contracts passed');
+
+// Hero actions never change the slide; indicators form their own reversible row.
+assert.deepEqual(nav.homeStep('gallery',1,'right',rows,counts),{zone:'gallery',index:1});
+assert.deepEqual(nav.homeStep('features',0,'left',rows,counts),{zone:'features',index:0});
+assert.deepEqual(nav.homeStep('features',1,'right',rows,counts),{zone:'features',index:2});
+assert.equal(nav.resetsViewport('features'),true);
+assert.equal(nav.homeStep('gallery',0,'down',['nav','gallery','queue','apps'],{gallery:1,queue:1}).zone,'queue');
+assert.equal(nav.homeStep('features',1,'down',['nav','gallery','features','apps'],counts).zone,'apps');
+console.log('Hero actions and slide indicators traverse separate rows with empty-row fallbacks');

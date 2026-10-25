@@ -11,7 +11,6 @@
   }
   function nearest(from,candidates,direction){let best=-1,value=Infinity;for(let i=0;i<candidates.length;i++){const next=score(from,candidates[i],direction);if(next<value){best=i;value=next;}}return best;}
   function homeStep(zone,index,direction,rows,counts){
-    if(zone==='gallery'&&(direction==='left'||direction==='right'))return {zone,index,feature:direction==='right'?1:-1};
     const row=rows.indexOf(zone);if(row<0)return {zone:'gallery',index:0};
     if(direction==='up'||direction==='down'){const next=clamp(row,direction==='down'?1:-1,rows.length);return {zone:rows[next],index:0};}
     return {zone,index:clamp(index,direction==='right'?1:-1,counts[zone]||1)};
@@ -20,7 +19,7 @@
   function reconcileWatchHero(watchHero,queue){return watchHero?heroForProgram(queue.find(program=>program.id===watchHero.id)):null;}
   function galleryActivation(watchHero){return watchHero?{op:'resume',id:watchHero.id}:null;}
   function maySettleStartup(interacted,modal){return !interacted&&!modal;}
-  function resetsViewport(zone){return zone==='nav'||zone==='gallery'||zone==='queue';}
+  function resetsViewport(zone){return zone==='nav'||zone==='gallery'||zone==='features'||zone==='queue';}
   function carouselStep(elapsed,delta,eligible,interval=8000){return eligible?{elapsed:(elapsed+delta)%interval,advance:elapsed+delta>=interval}:{elapsed:0,advance:false};}
   function matchProgram(title,items,episodic=false){const normalize=s=>String(s||'').normalize('NFKC').toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();const key=normalize(title);if(!key)return null;const found=items.filter(item=>(!episodic||item.mediaType==='tv')&&normalize(item.title)===key);return found.length===1?found[0]:null;}
   const api={carouselStep,matchProgram,clamp,score,nearest,homeStep,heroForProgram,reconcileWatchHero,galleryActivation,maySettleStartup,resetsViewport};scope.FudgeNav=api;if(typeof module!=='undefined')module.exports=api;
