@@ -7,10 +7,8 @@ JUnit license: https://junit.org/junit4/license.html
 
 Inter Variable is bundled from the user-supplied Cinema concept. Its SIL Open Font License is included at `app/src/main/assets/ui/assets/Inter-LICENSE.txt`. The supplied concept’s CSS, presentation and artwork are included to implement the user’s requested reference. No additional rights in third-party film artwork are asserted.
 
-TMDB metadata and images belong to their respective owners. This product uses the TMDB API but is not endorsed or certified by TMDB. The unmodified approved TMDB logo was obtained from the official TMDB asset URL:
-https://www.themoviedb.org/assets/2/v4/logos/v2/blue_short-8e7b30f73a4020692ccca9c88bafe5dcb6f8a62a4c6bc55cd9ba82bb2cd95f6c.svg
-SHA-256: `8e7b30f73a4020692ccca9c88bafe5dcb6f8a62a4c6bc55cd9ba82bb2cd95f6c`.
+Movie and series metadata is supplied by the official Cinemeta add-on, https://v3-cinemeta.strem.io/manifest.json . Metadata and artwork belong to their respective owners. Stremio is a separate installed application; this launcher only opens its registered title-detail links and provides no streams or playback engine.
 
-Streaming availability information is provided by JustWatch via TMDB and is credited in the interface. Availability is not a verified playback link. Weather/geocoding is supplied by Open-Meteo and credited in Settings. See https://open-meteo.com/ and https://developer.themoviedb.org/docs/faq .
+Weather/geocoding is supplied by Open-Meteo and credited in Settings. See https://open-meteo.com/ . The `org.json:json` dependency is used only by JVM tests (public-domain JSON-java distribution); Android supplies the runtime JSON implementation.
 
 Runtime app banners and names are read from installed applications. The earlier generated `assets/scenic.jpg` remains as a legacy source asset; the Cinema presentation uses the bundled reference art and live metadata instead.

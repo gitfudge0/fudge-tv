@@ -9,21 +9,23 @@ import java.io.*;
 import java.net.*;
 import java.security.MessageDigest;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+
 
 /** Opaque local image URLs. Only native provider art and installed-app banners enter this registry. */
 final class NativeImages {
     private static final int LIMIT=5*1024*1024;
     private final Context context;private final File directory;
-    private final ConcurrentHashMap<String,Entry> registry=new ConcurrentHashMap<>();
+    private final Map<String,Entry> registry=new LinkedHashMap<>(1024,0.75f,true);
     private final LruCache<String,byte[]> memory=new LruCache<String,byte[]>(8*1024*1024){@Override protected int sizeOf(String k,byte[] value){return value.length;}};
     private static final class Entry {final String uri;final Drawable drawable;Entry(String uri,Drawable d){this.uri=uri;drawable=d;}}
     NativeImages(Context c){context=c.getApplicationContext();directory=new File(c.getCacheDir(),"web_art");directory.mkdirs();}
-    String artwork(String uri){if(uri==null||uri.isEmpty())return "";String key=hash("art:"+uri);registry.put(key,new Entry(uri,null));return BridgePolicy.ORIGIN+"/art/"+key;}
-    String banner(String id,Drawable d){if(d==null)return "";String key=hash("banner:"+id);registry.put(key,new Entry(null,d));return BridgePolicy.ORIGIN+"/art/"+key;}
+    private synchronized void register(String key,Entry entry){registry.put(key,entry);while(registry.size()>1024){Iterator<String> keys=registry.keySet().iterator();keys.next();keys.remove();}}
+    private synchronized Entry registered(String key){return registry.get(key);}
+    String artwork(String uri){if(uri==null||uri.isEmpty())return "";String key=hash("art:"+uri);register(key,new Entry(uri,null));return BridgePolicy.ORIGIN+"/art/"+key;}
+    String banner(String id,Drawable d){if(d==null)return "";String key=hash("banner:"+id);register(key,new Entry(null,d));return BridgePolicy.ORIGIN+"/art/"+key;}
     byte[] get(String key)throws IOException{
         if(!key.matches("[a-f0-9]{64}"))throw new IOException("Image unavailable");
-        byte[] saved=memory.get(key);if(saved!=null)return saved;Entry entry=registry.get(key);if(entry==null)throw new IOException("Image unavailable");
+        byte[] saved=memory.get(key);if(saved!=null)return saved;Entry entry=registered(key);if(entry==null)throw new IOException("Image unavailable");
         File file=new File(directory,key);
         if(file.isFile()&&file.length()<=LIMIT){try(InputStream in=new FileInputStream(file)){saved=bounded(in);}memory.put(key,saved);return saved;}
         Bitmap bitmap=null;
@@ -46,8 +48,8 @@ final class NativeImages {
     private byte[] download(String raw)throws IOException{
         URL url=new URL(raw);
         for(int redirects=0;redirects<3;redirects++){
-            if((!"https".equals(url.getProtocol())&&!"http".equals(url.getProtocol()))||url.getUserInfo()!=null)throw new IOException("Image unavailable");
-            HttpURLConnection c=(HttpURLConnection)url.openConnection();c.setConnectTimeout(4000);c.setReadTimeout(4000);c.setInstanceFollowRedirects(false);c.setRequestProperty("Accept","image/*");
+            if((!"https".equals(url.getProtocol())&&!"http".equals(url.getProtocol()))||url.getUserInfo()!=null||NetworkPolicy.obsoleteMetadataHost(url.getHost()))throw new IOException("Image unavailable");
+            HttpURLConnection c=(HttpURLConnection)url.openConnection();c.setConnectTimeout(4000);c.setReadTimeout(4000);c.setInstanceFollowRedirects(false);c.setRequestProperty("Accept","image/*");c.setRequestProperty("User-Agent","FudgeTV/2.0");
             try{int code=c.getResponseCode();if(code>=300&&code<400){String next=c.getHeaderField("Location");if(next==null)throw new IOException("Image unavailable");url=new URL(url,next);continue;}if(code!=200||c.getContentLengthLong()>LIMIT)throw new IOException("Image unavailable");try(InputStream in=c.getInputStream()){return bounded(in);}}finally{c.disconnect();}
         }throw new IOException("Image unavailable");
     }

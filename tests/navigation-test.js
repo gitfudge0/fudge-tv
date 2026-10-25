@@ -43,6 +43,39 @@ assert.equal(nav.reconcileWatchHero(watchHero,[refreshedProgram]).action,'Open a
 assert.equal(nav.reconcileWatchHero(watchHero,[]),null);assert.equal(nav.reconcileWatchHero(null,[realProgram]),null);
 console.log('Updated/removed Continue Watching hero reconciliation contracts passed');
 
+// Timed gallery does not advance while paused, and resumes from a fresh interval.
+assert.deepEqual(nav.carouselStep(7900,100,true),{elapsed:0,advance:true});
+assert.deepEqual(nav.carouselStep(7900,100,false),{elapsed:0,advance:false});
+assert.deepEqual(nav.carouselStep(0,100,true),{elapsed:100,advance:false});
+assert.deepEqual(nav.carouselStep(3000,20,true),{elapsed:3020,advance:false});
+// Do not guess at episode titles, remakes or ambiguous movie/TV names.
+const exact={title:'Dune: Part Two',key:'movie:tt15239678'};
+assert.equal(nav.matchProgram('DUNE — Part Two',[exact]),exact);
+assert.equal(nav.matchProgram('Dune S01 E02',[exact]),null);
+assert.equal(nav.matchProgram('Dune: Part Two',[exact,{...exact,key:'series:tt0133093'}]),null);
+assert.equal(nav.matchProgram('',[{title:''}]),null);
+const enriched={...watchHero,description:'Cinemeta synopsis',art:'Cinemeta art'};
+assert.deepEqual(nav.galleryActivation(enriched),{op:'resume',id:realProgram.id});
+// A held horizontal key crosses consecutive items and clamps only at the end.
+let cursor=0;for(let i=0;i<20;i++)cursor=nav.homeStep('queue',cursor,'right',rows,counts).index;
+assert.equal(cursor,5);for(let i=0;i<3;i++)cursor=nav.homeStep('queue',cursor,'left',rows,counts).index;assert.equal(cursor,2);
+console.log('Gallery timing, conservative metadata matching, resume identity and held queue traversal passed');
+
+const residentTv={title:'Resident Alien',mediaType:'series'},residentMovie={title:'Resident Alien',mediaType:'movie'};
+assert.equal(nav.matchProgram('Resident Alien',[residentTv,residentMovie]),null);
+assert.equal(nav.matchProgram('Resident Alien',[residentTv,residentMovie],true),residentTv);
+assert.equal(nav.matchProgram('Resident Alien',[residentTv,{...residentTv,key:'series:tt15520258'}],true),null);
+assert.equal(nav.matchProgram('Resident Alien',[residentMovie],true),null);
+console.log('Provider episodic metadata disambiguates TV only; duplicate TV remains unmatched');
+
+// Only valid provider progress may create a remaining-time label or playback bar.
+assert.deepEqual(nav.playbackProgress(30000,60000),{percent:50,remaining:1});
+assert.deepEqual(nav.playbackProgress(0,60000),{percent:0,remaining:1});
+assert.deepEqual(nav.playbackProgress(60000,60000),{percent:100,remaining:0});
+for(const [position,duration] of [[undefined,60000],[-1,60000],[70000,60000],[0,0],[NaN,60000],[0,Infinity],['20',60000]])assert.equal(nav.playbackProgress(position,duration),null);
+assert.equal(nav.restorationIndex(4,2),1);assert.equal(nav.restorationIndex(4,0),-1);assert.equal(nav.restorationIndex(1,5),1);
+console.log('Provider playback validity and row-removal focus clamping passed');
+
 // Hero actions never change the slide; indicators form their own reversible row.
 assert.deepEqual(nav.homeStep('gallery',1,'right',rows,counts),{zone:'gallery',index:1});
 assert.deepEqual(nav.homeStep('features',0,'left',rows,counts),{zone:'features',index:0});

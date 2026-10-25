@@ -121,6 +121,10 @@ button.card.tv-focused .card-art{border:0;box-shadow:0 20px 35px #000a}
 .home-row button.card,.rail button.card{transition:none}
 .home-row button.card .card-art,.rail button.card .card-art{transition:box-shadow 280ms ease}
 
+/* Published artwork is loaded lazily; the existing dark artwork surface is the placeholder. */
+.provider-row .card-art{position:relative;overflow:hidden;background-color:#17191d}.shared-art{display:block;width:100%;height:100%;object-fit:cover;position:absolute;inset:0}.resume-art{position:relative}.provider-row .poster-card{flex-basis:180px}.provider-row .poster-card .card-art{aspect-ratio:2/3}.provider-row .card h3,.provider-row .card p{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.provider-row{align-items:flex-start;scroll-padding-inline:20px}.provider-row .card{text-align:start}.provider-row .card.tv-focused .card-art{box-shadow:0 20px 35px #000a,0 0 0 2px #ffffffc0}
+.shared-art[hidden]{display:none}.provider-row button.card.poster-card{flex-basis:180px;width:180px}.provider-row button.card.poster-card .card-art{height:270px;aspect-ratio:auto}.provider-row button.card.poster-card.tv-focused{flex-basis:230px;width:230px}.provider-row button.card.poster-card.tv-focused .card-art{height:345px}
+
 /* Keep neighbor previews inside the panel's rounded clipping boundary. */
 .queue-scroll{position:absolute;left:0;top:94px;width:100%;height:230px;padding:12px 0 15px;display:block;overflow:hidden;scroll-padding:0}
 .queue-scroll:after{display:none}

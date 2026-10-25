@@ -22,6 +22,6 @@ trap '"$ADB" -s "$SERIAL" shell rm -f /data/local/tmp/fudge-launcher.apk >/dev/n
 RESULT="$("$ADB" -s "$SERIAL" shell pm install --user "$TARGET_USER" -r /data/local/tmp/fudge-launcher.apk)"
 printf '%s\n' "$RESULT"
 printf '%s\n' "$RESULT" | rg '^Success' >/dev/null || { echo 'TV rejected install' >&2; exit 1; }
-[ "$("$ADB" -s "$SERIAL" shell pm list packages --user "$TARGET_USER" local.tv.launcher | tr -d '\r')" = 'package:local.tv.launcher' ] || { echo 'Installed package not found' >&2; exit 1; }
+"$ADB" -s "$SERIAL" shell pm list packages --user "$TARGET_USER" local.tv.launcher | tr -d '\r' | rg -Fx 'package:local.tv.launcher' >/dev/null || { echo 'Installed package not found' >&2; exit 1; }
 "$ADB" -s "$SERIAL" shell dumpsys package local.tv.launcher | rg 'versionCode=2 ' >/dev/null || { echo 'Installed version mismatch' >&2; exit 1; }
 printf '%s\n' 'Installed version 2 for the explicitly selected profile. Default Home and system packages were not changed.'

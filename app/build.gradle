@@ -1,22 +1,13 @@
 plugins { id 'com.android.application' }
-// The credential stays outside editable sources; only generated build outputs/APK contain it.
-def credentialPath = System.getenv('TMDB_CREDENTIAL_FILE') ?: new File(System.getProperty('user.home'), 'api.key').path
-def credentialFile = new File(credentialPath)
-if (!credentialFile.isFile()) throw new GradleException('TMDB credential file missing. Set TMDB_CREDENTIAL_FILE or provide ~/api.key.')
-def credentialText
-try { credentialText = credentialFile.getText('UTF-8') } catch (Exception ignored) { throw new GradleException('TMDB credential file cannot be read.') }
-def jwtCandidates = (credentialText =~ /(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+(?![A-Za-z0-9_-])/).findAll().unique()
-def keyCandidates = (credentialText =~ /(?<![A-Fa-f0-9])[A-Fa-f0-9]{32}(?![A-Fa-f0-9])/).findAll().unique()
-if (jwtCandidates.size() > 1 || (jwtCandidates.isEmpty() && keyCandidates.size() != 1)) throw new GradleException('TMDB credential file must contain one unambiguous Read Access Token or API key.')
-def bundledCredential = jwtCandidates ? jwtCandidates[0] : keyCandidates[0]
 android {
+    testBuildType 'release'
     buildFeatures { buildConfig true }
     namespace 'local.tv.launcher'
     compileSdk 35
-    defaultConfig { applicationId 'local.tv.launcher'; minSdk 31; targetSdk 35; versionCode 2; versionName '2.0'; buildConfigField 'String', 'TMDB_CREDENTIAL', '"' + bundledCredential + '"' }
+    defaultConfig { testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'; applicationId 'local.tv.launcher'; minSdk 31; targetSdk 35; versionCode 2; versionName '2.0' }
     signingConfigs { local { storeFile file('../launcher-signing.p12'); storePassword 'local-launcher-build'; keyAlias 'launcher'; keyPassword 'local-launcher-build' } }
     buildTypes { release { minifyEnabled false; signingConfig signingConfigs.local } }
     sourceSets { main { assets.srcDirs = ['src/main/assets', '../assets'] } }
     compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
 }
-dependencies { implementation 'androidx.recyclerview:recyclerview:1.4.0'; implementation 'androidx.webkit:webkit:1.12.1'; testImplementation 'junit:junit:4.13.2' }
+dependencies { implementation 'androidx.recyclerview:recyclerview:1.4.0'; implementation 'androidx.webkit:webkit:1.12.1'; testImplementation 'junit:junit:4.13.2'; testImplementation 'org.json:json:20240303'; androidTestImplementation 'androidx.test:runner:1.6.2'; androidTestImplementation 'androidx.test.ext:junit:1.2.1' }

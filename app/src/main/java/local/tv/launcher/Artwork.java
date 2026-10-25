@@ -69,10 +69,10 @@ final class Artwork implements AutoCloseable {
         for(int redirect=0;redirect<4;redirect++) {
             URL url=new URL(current);
             if(!"https".equals(url.getProtocol()) && !"http".equals(url.getProtocol())) throw new IOException("Unsupported redirect");
-            if(url.getUserInfo()!=null) throw new IOException("Credentials forbidden");
+            if(url.getUserInfo()!=null||NetworkPolicy.obsoleteMetadataHost(url.getHost())) throw new IOException("Credentials forbidden");
             HttpURLConnection connection=(HttpURLConnection)url.openConnection();
             connection.setConnectTimeout(3500); connection.setReadTimeout(3500); connection.setInstanceFollowRedirects(false);
-            connection.setRequestProperty("Accept", "image/*");
+            connection.setRequestProperty("Accept", "image/*");connection.setRequestProperty("User-Agent","FudgeTV/2.0");
             try {
                 int code=connection.getResponseCode();
                 if(code>=300 && code<400) {
