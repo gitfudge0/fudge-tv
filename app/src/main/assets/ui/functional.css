@@ -148,9 +148,9 @@ button{transition-duration:125ms}.backdrop{transition:opacity 375ms,transform 4s
 
 /* Give featured artwork the first screen, with its details near the lower third. */
 .hero{height:max(980px,105vh)}
-.hero-copy{top:70vh;width:76%;max-width:1100px;transform:none}
+.hero-copy{top:55vh;width:76%;max-width:1100px;transform:none}
 .hero-bottom{bottom:35px}
-@media(max-width:720px){.hero{height:max(920px,115vh)}.hero-copy{width:88%;top:65vh;transform:none}}
+@media(max-width:720px){.hero{height:max(920px,115vh)}.hero-copy{width:88%;top:55vh;transform:none}}
 /* Media uses portrait posters; installed apps keep their native app artwork. */
 .rail button.card.poster-card,.provider-row button.card.poster-card{flex-basis:200px;width:200px}
 .rail button.card.poster-card .card-art,.provider-row button.card.poster-card .card-art{height:300px;aspect-ratio:2/3}
