@@ -18,3 +18,25 @@ button.tv-focused:not(.dot){transform:translateY(-2px)}
 /* Keep the first app strip and labels on screen at 1920×1080. */
 .hero{height:710px}.hero-copy{top:245px}.queue{top:160px;height:510px}.queue-scroll{height:410px}.content{margin-top:-25px}.home-apps .section-head{margin-bottom:10px}.home-apps .card{flex-basis:220px}.home-apps .card-art{aspect-ratio:16/9}.hero-bottom{bottom:50px}
 .modal h2{font-size:40px;line-height:48px}
+/* Large-TV hierarchy and an elevated, neutral focus treatment requested after remote testing. */
+.hero-copy{top:220px;width:56%;max-width:1050px}.hero-copy h1{font-size:48px;line-height:56px}.hero-copy .description,.modal p,.settings p{font-size:24px;line-height:30px}.hero-copy .description{max-width:960px}.meta{font-size:22px;line-height:28px}.eyebrow{font-size:17px;line-height:23px}.primary,.secondary,.card h3,.resume-title{font-size:22px;line-height:28px}.section-head h2,.queue-head h2{font-size:31px;line-height:38px}.section-head p,.resume-sub,.resume-time,.card p,.status-note{font-size:18px;line-height:25px}.clock strong{font-size:31px}.clock span,.weather strong{font-size:20px}.weather small{font-size:17px}.modal h2{font-size:48px;line-height:56px}.search-input{font-size:30px;line-height:38px}.search-panel .results{font-size:22px}.settings input{font-size:23px;line-height:30px}.settings .status-note,.modal .status-note{font-size:18px;line-height:25px}.queue{width:420px;right:5%;top:150px;height:520px}.queue-scroll{height:414px}.queue-head{gap:8px}.queue-head h2{font-size:27px;line-height:34px}.resume-title{white-space:normal}.resume-sub{font-size:18px}.home-apps .card h3{font-size:21px;line-height:27px}.home-apps .card{flex-basis:220px}.home-row{padding-top:15px;padding-bottom:20px}
+button:focus-visible,input:focus-visible,a:focus-visible,button.tv-focused,#heroCopy.tv-focused{outline:none;outline-offset:0}
+button,.card,.resume{transition:transform 230ms ease,box-shadow 230ms ease,background-color 230ms ease}
+button.tv-focused:not(.dot){transform:translateY(-3px) scale(1.04);box-shadow:0 10px 30px #0008,0 0 0 2px #ffffff75,0 0 24px #ffffff20}
+.card.tv-focused{transform:translateY(-4px) scale(1.05);box-shadow:none}.card.tv-focused .card-art{transform:none;box-shadow:0 14px 34px #0009,0 0 0 2px #ffffffe0,0 0 27px #ffffff20}
+.resume.tv-focused{transform:scale(1.035);background:#ffffff16;box-shadow:0 12px 28px #0008,0 0 0 2px #ffffffb0,0 0 22px #ffffff15}
+.navlinks button.tv-focused{transform:scale(1.08);background:#ffffff35;border-radius:50%;box-shadow:0 7px 24px #0007,0 0 18px #ffffff25}
+#heroCopy.tv-focused{border-radius:0;box-shadow:none}#heroCopy.tv-focused .primary{transform:scale(1.04);background:#fff;box-shadow:0 10px 30px #0008,0 0 24px #ffffff35}
+input:focus-visible{box-shadow:0 0 0 2px #ffffffd0,0 8px 24px #0006}.dot.tv-focused{background:#fff;transform:scale(1.3);box-shadow:0 0 14px #fff7}
+.queue-head h2{font-size:30px;line-height:37px}.modal p[style]{font-size:22px!important;line-height:29px!important}
+/* Reference typography consumes these tokens, including its !important declarations. */
+:root{--type-large-title:48px;--line-large-title:56px;--type-title1:36px;--line-title1:44px;--type-title2:31px;--line-title2:38px;--type-title3:28px;--line-title3:35px;--type-headline:24px;--line-headline:30px;--type-body:24px;--line-body:30px;--type-callout:23px;--line-callout:29px;--type-subheadline:22px;--line-subheadline:28px;--type-footnote:20px;--line-footnote:26px;--type-caption1:18px;--line-caption1:25px;--type-caption2:17px;--line-caption2:23px}
+/* Compact recommendation queue: three complete rows, with space for raised focus. */
+.queue-scroll{box-sizing:border-box;height:414px;overflow-y:auto;overflow-x:hidden;padding:12px 12px 14px;scrollbar-width:thin}
+.queue .resume{display:grid;grid-template-columns:140px minmax(0,1fr);grid-template-rows:minmax(0,1fr)25px;column-gap:12px;width:100%;height:120px;box-sizing:border-box;padding:6px;margin:0 0 10px;border-radius:14px;align-items:center;transform-origin:center}
+.queue .resume-art{grid-column:1;grid-row:1/3;height:88px;width:140px;border-radius:10px;align-self:center}
+.queue .resume-info{grid-column:2;grid-row:1;display:block;min-width:0;margin:0;align-self:center}
+.queue .resume-title{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;white-space:normal;font-size:22px;line-height:28px}
+.queue .resume-time{display:block;font-size:18px;line-height:23px;margin-top:3px}
+.queue .resume-sub{grid-column:2;grid-row:2;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0;font-size:18px;line-height:25px;align-self:start}
+.queue .resume.tv-focused{border-radius:14px;box-shadow:0 7px 16px #0008,0 0 0 2px #ffffffb0,0 0 12px #ffffff18}

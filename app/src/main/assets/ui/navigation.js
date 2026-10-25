@@ -16,5 +16,10 @@
     if(direction==='up'||direction==='down'){const next=clamp(row,direction==='down'?1:-1,rows.length);return {zone:rows[next],index:0};}
     return {zone,index:clamp(index,direction==='right'?1:-1,counts[zone]||1)};
   }
-  const api={clamp,score,nearest,homeStep};scope.FudgeNav=api;if(typeof module!=='undefined')module.exports=api;
+  function heroForProgram(program){if(!program||!program.id)return null;return {id:program.id,title:String(program.title||''),description:String(program.description||''),art:String(program.art||''),owner:String(program.owner||''),action:program.resumable?'Resume':'Open app'};}
+  function reconcileWatchHero(watchHero,queue){return watchHero?heroForProgram(queue.find(program=>program.id===watchHero.id)):null;}
+  function galleryActivation(watchHero){return watchHero?{op:'resume',id:watchHero.id}:null;}
+  function maySettleStartup(interacted,modal){return !interacted&&!modal;}
+  function resetsViewport(zone){return zone==='nav'||zone==='gallery'||zone==='queue';}
+  const api={clamp,score,nearest,homeStep,heroForProgram,reconcileWatchHero,galleryActivation,maySettleStartup,resetsViewport};scope.FudgeNav=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window==='undefined'?globalThis:window);
