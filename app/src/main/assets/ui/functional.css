@@ -151,6 +151,7 @@ button{transition-duration:125ms}.backdrop{transition:opacity 375ms,transform 4s
 .hero{height:auto;min-height:0;padding-top:45vh;overflow:visible}
 .hero-copy{position:relative;top:auto;left:6%;width:76%;max-width:1100px;transform:none}
 .hero>.backdrop,.hero:after{bottom:auto;height:calc(100% + 420px);min-height:100vh}
+.hero>.backdrop{transform:none}
 .content{margin-top:36px}
 @media(max-width:720px){.hero-copy{width:88%}}
 /* Media uses portrait posters; installed apps keep their native app artwork. */
@@ -174,3 +175,11 @@ button{transition-duration:125ms}.backdrop{transition:opacity 375ms,transform 4s
 .watch-row button.card.tv-focused .card-art{height:214px}
 .watch-progress{position:absolute;left:12px;right:12px;bottom:12px;height:5px;background:#ffffff55;border-radius:4px;overflow:hidden}
 .watch-progress i{display:block;height:100%;background:#fff}
+
+/* Reserve the largest focused artwork, one title line, metadata and row padding. */
+.home-row,.rail{--row-title-height:28px;--row-title-margin:17px;--row-meta-height:25px;--row-padding:45px;--row-height:calc(375px + var(--row-title-height) + var(--row-title-margin) + var(--row-meta-height) + var(--row-padding))}
+.home-apps .home-row{--row-title-height:27px;--row-height:calc(164px + var(--row-title-height) + var(--row-title-margin) + var(--row-padding))}
+.watch-row{--row-padding:32px;--row-height:calc(214px + var(--row-title-height) + var(--row-title-margin) + 2 * var(--row-meta-height) + var(--row-padding))}
+.home-row,.rail,.home-apps .home-row{box-sizing:border-box;height:var(--row-height);min-height:var(--row-height);max-height:var(--row-height);overflow-y:hidden}
+.home-row .card h3,.rail .card h3{line-height:var(--row-title-height);height:var(--row-title-height)}
+.home-row .card p,.rail .card p{line-height:var(--row-meta-height);height:var(--row-meta-height)}

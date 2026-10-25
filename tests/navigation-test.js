@@ -18,7 +18,7 @@ assert.equal(nav.homeStep('apps',0,'left',rows,counts).index,0);
 assert.equal(nav.homeStep('queue',2,'right',rows,counts).index,3);
 const fs=require('node:fs'),path=require('node:path');
 const html=fs.readFileSync(path.join(__dirname,'../app/src/main/assets/ui/index.html'),'utf8'),js=fs.readFileSync(path.join(__dirname,'../app/src/main/assets/ui/app.js'),'utf8');
-assert.match(html,/<div class="weather"/);assert.doesNotMatch(html,/<button[^>]*class="weather"/);
+assert.doesNotMatch(html,/class="ambient"|class="weather"|id="clockTime"|id="clockDate"/);
 assert.match(html,/id="heroCopy" role="region"/);assert.doesNotMatch(html,/id="heroCopy" tabindex/);assert.match(js,/renderRail\(\);focus\(heroTarget\(\),false\)/);
 assert.ok(html.indexOf('id="homeApps"')<html.indexOf('id="providerRows"')&&html.indexOf('id="providerRows"')<html.indexOf('id="rail"'));
 console.log('Home navigation/startup/content contracts passed');
