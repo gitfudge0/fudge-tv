@@ -26,9 +26,11 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -75,6 +77,8 @@ final class NativeHomeView extends FrameLayout {
       searchItems = Collections.emptyList();
   private int heroIndex;
   private String catalogMessage = "The catalog is loading. Your streaming apps remain available.";
+  private boolean appSearchPending;
+  private List<Library.Program> appSearchItems = Collections.emptyList();
   private String searchMessage = "", query = "", submittedQuery = "";
   private boolean active, searchVisible, searchPending, released, catalogStale;
   private Dialog dialog;
@@ -504,6 +508,12 @@ final class NativeHomeView extends FrameLayout {
     scheduleCarousel();
   }
 
+  void renderAppSearch(List<Library.Program> results, boolean finished) {
+    appSearchPending = !finished;
+    appSearchItems = new ArrayList<>(results);
+    renderSearchRows();
+  }
+
   void renderSearch(JSONObject result) {
     searchPending = false;
     searchItems = items(result.optJSONArray("items"));
@@ -582,6 +592,8 @@ final class NativeHomeView extends FrameLayout {
     query = value.trim();
     submittedQuery = "";
     searchItems = Collections.emptyList();
+    appSearchItems = Collections.emptyList();
+    appSearchPending = !query.isEmpty();
     searchMessage = "";
     searchPending = !query.isEmpty();
     renderSearchRows();
@@ -600,6 +612,36 @@ final class NativeHomeView extends FrameLayout {
       rows.add(
           new NativeRowAdapter.Row(
               "search-apps", "Apps", "Installed TV apps", NativeCard.Kind.APP, apps));
+    List<NativeCard> shared = new ArrayList<>(), handoffs = new ArrayList<>();
+    Set<String> seen = new HashSet<>();
+    if (!query.isEmpty()) {
+      List<Library.Program> candidates = new ArrayList<>(snapshot.programs);
+      for (Library.Channel channel : snapshot.channels) candidates.addAll(channel.programs);
+      for (Library.Program program : candidates)
+        if (program.title.toLowerCase(Locale.ROOT).contains(query.toLowerCase(Locale.ROOT))
+            && seen.add(program.id)) shared.add(NativeCard.program(program, false));
+      for (Library.Program program : appSearchItems)
+        if (seen.add(program.id)) {
+          if (program.searchHandoff) handoffs.add(NativeCard.program(program, false));
+          else shared.add(NativeCard.program(program, false));
+        }
+    }
+    if (!shared.isEmpty())
+      rows.add(
+          new NativeRowAdapter.Row(
+              "search-shared",
+              "From your apps",
+              "Shared recommendations and app search results",
+              NativeCard.Kind.POSTER,
+              shared));
+    if (!handoffs.isEmpty())
+      rows.add(
+          new NativeRowAdapter.Row(
+              "search-handoffs",
+              "Search in apps",
+              "Continue this search inside an app",
+              NativeCard.Kind.POSTER,
+              handoffs));
     List<NativeCard> titles = new ArrayList<>();
     for (JSONObject item : searchItems) titles.add(NativeCard.title(item));
     if (!titles.isEmpty())
@@ -609,9 +651,9 @@ final class NativeHomeView extends FrameLayout {
     searchStatus.setText(
         query.isEmpty()
             ? "Enter a name to search your apps and Cinemeta."
-            : searchPending
-                ? "Searching Cinemeta…"
-                : !searchMessage.isEmpty()
+            : searchPending || appSearchPending
+                ? "Searching your apps and Cinemeta…"
+                : !searchMessage.isEmpty() && shared.isEmpty() && handoffs.isEmpty()
                     ? searchMessage
                     : rows.isEmpty() ? "No apps or titles found." : "");
     searchAdapter.submitList(rows);

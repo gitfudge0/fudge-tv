@@ -10,7 +10,7 @@ The native launcher displays preview channels published through Android's TV Pro
 
 `MainActivity` observes channels, preview programs and Watch Next while resumed. Provider notifications are debounced by 400 ms; package changes and foreground entry also refresh the snapshot. Lifecycle cleanup removes observers and pending refreshes, and cancels obsolete query work. Provider availability and query failures are reported independently so a restricted source does not disable the launcher.
 
-Settings are under **Settings → TV controls & data access → Recommendations**. Preferences persist locally: recommendations globally, Continue Watching, maximum items per row (10, 20, 30 or 40), visible discovered channels, and row ordering through move-to-top. Hidden discovered channels remain available in settings. These controls filter accessible records; they cannot grant provider access.
+Settings are under **Settings → TV controls & data access → Recommendations**. Preferences persist locally: recommendations globally, Continue Watching, maximum items per row (10, 20, 30 or 40), visible discovered channels, and row ordering through move-to-top. Hidden discovered channels remain available in settings. Published preview channels can appear even when the system launcher has not selected their channel `browsable` flag; Fudge applies its own visibility preferences. Individual programs marked non-browsable remain excluded. These controls filter accessible records; they cannot grant provider access.
 
 ## Permission boundaries
 
@@ -53,3 +53,11 @@ Automated Android tests use an injected source and platform cursors for mapping,
 
 
 For a task-owned local emulator, `./verify-android.sh --serial emulator-5560` installs and runs the verification test pair, which uses production sources with shrinking and minification disabled for deterministic fixtures. The actual release APK must be launched and checked separately. The script rejects physical targets; it never changes default Home or system packages. Provider capability results on an emulator do not establish access on a real TV.
+
+## Installed-app search
+
+Search matches visible shared recommendations and discovers exported Android search activities through `SearchManager` searchable metadata, global-search registrations, and `ACTION_SEARCH` handlers. Accessible suggestion providers contribute real content cards under **From your apps**. **Search in apps** offers a separate query handoff; it is not a content match or proof of catalog availability. Suggestion launches remain bound to the publishing app’s exported, permission-accessible activity; legitimate `content:` suggestion links are accepted through this separate validation path. No payloads, selectors, grant flags, or arbitrary actions are copied from providers.
+
+Apps without public searchable integration remain launchable but cannot contribute remote catalog results. Google’s privileged/personalized search index is not replicated. Independent provider workers isolate failures from Cinemeta. Search caps discovery at 32 installed apps, eight candidate activities per app and 20 suggestion rows per query; six provider slots and a 1.8-second deadline bound work and ignore late responses. A provider ignoring cancellation can occupy a slot until it returns; queued searches cannot grow without bound. Refresh, edits and lifecycle changes invalidate obsolete results.
+
+Verification-only `AppSearchTest` exercises Android searchable metadata/provider federation, owner-mapped content activation, URI encoding, stale suppression and launch sanitization. `AppSearchTest.actualAppUidSearchProbe` logs only result/handoff counts under `FudgeAppSearchProbe`; empty results on a device indicate capability limits, not a successful catalog search. Verification-only searchable activity/provider fixtures are absent from release builds.

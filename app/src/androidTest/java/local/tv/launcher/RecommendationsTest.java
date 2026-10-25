@@ -148,6 +148,38 @@ public class RecommendationsTest {
   }
 
   @Test
+  public void publishedChannelsAreVisibleIndependentlyOfSystemHomeSelection() {
+    FakeSource source =
+        new FakeSource() {
+          @Override
+          public Cursor query(Uri uri, CancellationSignal signal) {
+            if (uri.equals(TvContract.Channels.CONTENT_URI)) {
+              MatrixCursor cursor =
+                  new MatrixCursor(
+                      new String[] {"_id", "package_name", "display_name", "type", "browsable"});
+              cursor.addRow(
+                  new Object[] {
+                    1, owner, "Published but not selected in system home", "TYPE_PREVIEW", 0
+                  });
+              return cursor;
+            }
+            return super.query(uri, signal);
+          }
+        };
+    Library.Snapshot result = snapshot(true);
+    Recommendations.load(context, result, null, source);
+    assertEquals(1, result.channels.size());
+    assertFalse(result.channels.get(0).browsable);
+    preferences
+        .edit()
+        .putStringSet("hidden", Collections.singleton("channel:" + owner + ":1"))
+        .commit();
+    result = snapshot(true);
+    Recommendations.load(context, result, null, source);
+    assertTrue(result.channels.isEmpty());
+  }
+
+  @Test
   public void unavailableAndDeniedAndCrashingSourcesRemainDistinct() {
     FakeSource source = new FakeSource();
     source.available = false;

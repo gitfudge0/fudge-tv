@@ -28,7 +28,7 @@ final class Library {
     int contentType = -1, aspectRatio = -1;
     long updated;
     Intent launch;
-    boolean resumable, portrait;
+    boolean resumable, portrait, searchHandoff;
     long position, duration, engagement;
     int weight;
   }

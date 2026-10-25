@@ -190,8 +190,49 @@ public class NativeHomeViewTest {
             throw new AssertionError(e);
           }
           assertEquals(
+              "Searching your apps and Cinemeta…",
+              ((TextView) activity.home.findViewById(R.id.search_status)).getText().toString());
+          activity.home.renderAppSearch(java.util.Collections.emptyList(), true);
+          assertEquals(
               "Cinemeta unavailable.",
               ((TextView) activity.home.findViewById(R.id.search_status)).getText().toString());
+          Library.Program result = new Library.Program();
+          result.id = "appsearch:result:test";
+          result.owner = "fixture.app";
+          result.title = "A real app result";
+          activity.home.renderAppSearch(java.util.Collections.singletonList(result), true);
+          assertEquals(
+              "App results must not be described as a failed catalog search",
+              "",
+              ((TextView) activity.home.findViewById(R.id.search_status)).getText().toString());
+        });
+  }
+
+  @Test
+  public void appSearchHandoffHasSeparateLabelAndActivatesByOpaqueIdentity() {
+    main(
+        () -> {
+          activity.home.showSearch();
+          ((EditText) activity.home.findViewById(R.id.search_input)).setText("needle");
+          Library.Program handoff = new Library.Program();
+          handoff.id = "appsearch:handoff:fixture";
+          handoff.owner = "fixture.app";
+          handoff.title = "Search in Fixture";
+          handoff.searchHandoff = true;
+          activity.home.renderAppSearch(java.util.Collections.singletonList(handoff), true);
+        });
+    waitMs(150);
+    main(
+        () -> {
+          RecyclerView rows = activity.home.findViewById(R.id.search_rows);
+          NativeRowAdapter adapter = (NativeRowAdapter) rows.getAdapter();
+          assertEquals(1, adapter.getItemCount());
+          assertEquals("Search in apps", adapter.getCurrentList().get(0).title);
+          ViewGroup section = (ViewGroup) rows.findViewHolderForAdapterPosition(0).itemView;
+          RecyclerView cards = (RecyclerView) section.getChildAt(2);
+          cards.findViewHolderForAdapterPosition(0).itemView.performClick();
+          assertEquals("appsearch:handoff:fixture", activity.resumes.get(0));
+          assertNull(activity.openedTitle);
         });
   }
 

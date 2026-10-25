@@ -28,6 +28,8 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
   private NativeHomeView home;
   private NativeImages images;
   private CatalogClient catalog;
+  private AppSearch appSearch;
+  private final Map<String, Library.Program> searchPrograms = new HashMap<>();
   private boolean resumed;
   private int libraryGeneration, catalogGeneration, searchGeneration, detailsGeneration;
   private String pendingQuery;
@@ -76,6 +78,7 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
                 | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
     images = new NativeImages(this);
     catalog = createCatalog();
+    appSearch = new AppSearch(this);
     home = new NativeHomeView(this, images, this);
     setContentView(home);
   }
@@ -161,6 +164,7 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
                 for (Library.App app : next.allApps) apps.put(app.id, app);
                 for (Library.App app : next.apps) apps.put(app.id, app);
                 home.renderSnapshot(next);
+                if (pendingQuery != null) loadSearch(pendingQuery);
               });
         });
   }
@@ -194,6 +198,16 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
 
   private void loadSearch(String query) {
     final int generation = ++searchGeneration;
+    searchPrograms.clear();
+    appSearch.search(
+        query,
+        new ArrayList<>(snapshot.allApps),
+        (results, finished) -> {
+          if (!resumed || generation != searchGeneration) return;
+          searchPrograms.clear();
+          for (Library.Program result : results) searchPrograms.put(result.id, result);
+          home.renderAppSearch(results, finished);
+        });
     network.submit(
         LatestRequests.Lane.SEARCH,
         () -> {
@@ -202,7 +216,6 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
           main.post(
               () -> {
                 if (!resumed || generation != searchGeneration) return;
-                pendingQuery = null;
                 home.renderSearch(result);
               });
         });
@@ -212,6 +225,8 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
   public void onCancelSearch() {
     pendingQuery = null;
     searchGeneration++;
+    appSearch.cancel();
+    searchPrograms.clear();
     network.cancel(LatestRequests.Lane.SEARCH);
   }
 
@@ -269,7 +284,8 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
 
   @Override
   public void onResumeProgram(String id) {
-    Library.Program program = programs.get(id);
+    Library.Program program =
+        searchPrograms.containsKey(id) ? searchPrograms.get(id) : programs.get(id);
     if (program != null) launchRecommendation(program);
   }
 
@@ -626,6 +642,7 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
   protected void onPause() {
     resumed = false;
     home.setActive(false);
+    appSearch.cancel();
     network.cancelAll();
     recommendationRefresh.stop();
     cancelLibrary();
@@ -644,6 +661,7 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
     libraryExecutor.close();
     network.close();
     catalog.close();
+    appSearch.close();
     images.close();
     main.removeCallbacksAndMessages(null);
     super.onDestroy();

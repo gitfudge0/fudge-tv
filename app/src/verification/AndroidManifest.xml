@@ -1,5 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
+        <activity android:name="local.tv.launcher.SearchFixtureActivity" android:exported="true">
+            <intent-filter><action android:name="android.intent.action.SEARCH"/></intent-filter>
+            <meta-data android:name="android.app.searchable" android:resource="@xml/search_fixture"/>
+        </activity>
+        <provider android:name="local.tv.launcher.SearchFixtureProvider"
+            android:authorities="local.tv.launcher.searchfixture" android:exported="true"/>
         <activity android:name="local.tv.launcher.NativeUiTestActivity"
             android:exported="false" android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen" />
         <activity android:name="local.tv.launcher.NativeLifecycleTestActivity"

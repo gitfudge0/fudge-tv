@@ -142,7 +142,9 @@ final class Recommendations {
     boolean restricted = false, failed = false;
     for (Library.Channel row : out.recommendationChannels) {
       if (out.channels.size() >= MAX_VISIBLE_ROWS) break;
-      if (!row.browsable || hidden.contains(row.id)) continue;
+      // The browsable flag reflects selection in the system home, not publication or access.
+      // Fudge owns its own channel visibility preferences.
+      if (hidden.contains(row.id)) continue;
       try (Cursor cursor =
           query(source, TvContract.buildPreviewProgramsUriForChannel(row.numericId), signal)) {
         if (cursor == null) {
@@ -196,7 +198,7 @@ final class Recommendations {
                 ? "TV provider access is restricted for this launcher."
                 : failed
                     ? "Some preview channels are temporarily unavailable."
-                    : "Your apps have not shared accessible visible preview programs.";
+                    : "Your apps have not shared accessible preview programs.";
   }
 
   private static void sortPrograms(List<Library.Program> programs) {
