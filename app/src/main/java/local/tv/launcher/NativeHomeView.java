@@ -431,8 +431,6 @@ final class NativeHomeView extends FrameLayout {
     for (TvInputs.Entry input : snapshot.inputs) inputs.add(NativeCard.input(input));
     if (inputs.isEmpty())
       inputs.add(NativeCard.control("input-menu", "Inputs", "Open system input menu"));
-    inputs.add(NativeCard.control("system-settings", "Settings", "Picture, sound & more"));
-    inputs.add(NativeCard.control("system-home", "TV Home", "Built-in TV launcher"));
     rows.add(
         new NativeRowAdapter.Row("inputs", "Inputs & controls", "", NativeCard.Kind.INPUT, inputs));
     homeAdapter.submitList(rows);
@@ -478,19 +476,18 @@ final class NativeHomeView extends FrameLayout {
       rows.add(
           new NativeRowAdapter.Row(
               "search-apps", "Apps", "Installed TV apps", NativeCard.Kind.APP, apps));
-    List<NativeCard> shared = new ArrayList<>(), handoffs = new ArrayList<>();
+    List<NativeCard> shared = new ArrayList<>();
     Set<String> seen = new HashSet<>();
     if (!query.isEmpty()) {
       List<Library.Program> candidates = new ArrayList<>(snapshot.programs);
       for (Library.Channel channel : snapshot.channels) candidates.addAll(channel.programs);
       for (Library.Program program : candidates)
-        if (program.title.toLowerCase(Locale.ROOT).contains(query.toLowerCase(Locale.ROOT))
-            && seen.add(program.id)) shared.add(NativeCard.program(program, false));
+        if (!program.searchHandoff
+            && program.title.toLowerCase(Locale.ROOT).contains(query.toLowerCase(Locale.ROOT))
+            && seen.add(program.id)) shared.add(NativeCard.recommendation(program));
       for (Library.Program program : appSearchItems)
-        if (seen.add(program.id)) {
-          if (program.searchHandoff) handoffs.add(NativeCard.program(program, false));
-          else shared.add(NativeCard.program(program, false));
-        }
+        if (!program.searchHandoff && seen.add(program.id))
+          shared.add(NativeCard.recommendation(program));
     }
     if (!shared.isEmpty())
       rows.add(
@@ -498,16 +495,8 @@ final class NativeHomeView extends FrameLayout {
               "search-shared",
               "From your apps",
               "Shared recommendations and app search results",
-              NativeCard.Kind.POSTER,
+              NativeCard.Kind.RECOMMENDATION,
               shared));
-    if (!handoffs.isEmpty())
-      rows.add(
-          new NativeRowAdapter.Row(
-              "search-handoffs",
-              "Search in apps",
-              "Continue this search inside an app",
-              NativeCard.Kind.POSTER,
-              handoffs));
     List<NativeCard> titles = new ArrayList<>();
     for (JSONObject item : searchItems) titles.add(NativeCard.title(item));
     if (!titles.isEmpty())
@@ -519,7 +508,7 @@ final class NativeHomeView extends FrameLayout {
             ? "Enter a name to search your apps and Cinemeta."
             : searchPending || appSearchPending
                 ? "Searching your apps and Cinemeta…"
-                : !searchMessage.isEmpty() && shared.isEmpty() && handoffs.isEmpty()
+                : !searchMessage.isEmpty() && shared.isEmpty()
                     ? searchMessage
                     : rows.isEmpty() ? "No apps or titles found." : "");
     searchAdapter.submitList(rows);

@@ -227,17 +227,34 @@ public class NativeHomeViewTest {
   }
 
   @Test
-  public void appSearchHandoffHasSeparateLabelAndActivatesByOpaqueIdentity() {
+  public void searchOmitsHandoffsAndShowsRealProviderResultsAsLandscapeCards() {
+    Library.Program handoff = new Library.Program();
+    handoff.id = "appsearch:handoff:fixture";
+    handoff.owner = "fixture.app";
+    handoff.title = "Search in Fixture";
+    handoff.searchHandoff = true;
     main(
         () -> {
           activity.home.showSearch();
           ((EditText) activity.home.findViewById(R.id.search_input)).setText("needle");
-          Library.Program handoff = new Library.Program();
-          handoff.id = "appsearch:handoff:fixture";
-          handoff.owner = "fixture.app";
-          handoff.title = "Search in Fixture";
-          handoff.searchHandoff = true;
           activity.home.renderAppSearch(java.util.Collections.singletonList(handoff), true);
+        });
+    waitMs(150);
+    main(
+        () -> {
+          NativeRowAdapter adapter =
+              (NativeRowAdapter)
+                  ((RecyclerView) activity.home.findViewById(R.id.search_rows)).getAdapter();
+          assertEquals(
+              "A handoff alone must not create an activatable search section",
+              0,
+              adapter.getItemCount());
+          assertTrue(activity.resumes.isEmpty());
+          Library.Program result = new Library.Program();
+          result.id = "appsearch:result:fixture";
+          result.owner = "fixture.app";
+          result.title = "Needle from Fixture";
+          activity.home.renderAppSearch(java.util.Arrays.asList(handoff, result), true);
         });
     waitMs(150);
     main(
@@ -245,11 +262,20 @@ public class NativeHomeViewTest {
           RecyclerView rows = activity.home.findViewById(R.id.search_rows);
           NativeRowAdapter adapter = (NativeRowAdapter) rows.getAdapter();
           assertEquals(1, adapter.getItemCount());
-          assertEquals("Search in apps", adapter.getCurrentList().get(0).title);
+          NativeRowAdapter.Row row = adapter.getCurrentList().get(0);
+          assertEquals("From your apps", row.title);
+          assertEquals(NativeCard.Kind.RECOMMENDATION, row.kind);
+          assertEquals(1, row.cards.size());
+          assertEquals("appsearch:result:fixture", row.cards.get(0).id);
           ViewGroup section = (ViewGroup) rows.findViewHolderForAdapterPosition(0).itemView;
           RecyclerView cards = (RecyclerView) section.getChildAt(2);
-          cards.findViewHolderForAdapterPosition(0).itemView.performClick();
-          assertEquals("appsearch:handoff:fixture", activity.resumes.get(0));
+          NativeCardAdapter.Holder card =
+              (NativeCardAdapter.Holder) cards.findViewHolderForAdapterPosition(0);
+          assertEquals(16f / 9, card.artwork.getWidth() / (float) card.artwork.getHeight(), .02f);
+          assertEquals("Needle from Fixture", card.title.getText().toString());
+          card.itemView.performClick();
+          assertEquals(
+              java.util.Collections.singletonList("appsearch:result:fixture"), activity.resumes);
           assertNull(activity.openedTitle);
         });
   }
@@ -963,6 +989,12 @@ public class NativeHomeViewTest {
           assertTrue(description.contains("Living-room receiver"));
           assertTrue(description.contains("HDMI 2"));
           assertTrue(description.contains("Connected"));
+          NativeRowAdapter home =
+              (NativeRowAdapter)
+                  ((RecyclerView) activity.home.findViewById(R.id.home_rows)).getAdapter();
+          java.util.List<NativeCard> inputs = home.getCurrentList().get(4).cards;
+          assertEquals("Only discovered inputs belong in the input list", 1, inputs.size());
+          assertEquals("input:fixture/real-input", inputs.get(0).id);
         });
     instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER);
     main(() -> assertEquals("input:fixture/real-input", activity.launches.get(0)));
@@ -985,6 +1017,12 @@ public class NativeHomeViewTest {
     main(
         () -> {
           assertEquals("input:null", activity.launches.get(0));
+          NativeRowAdapter home =
+              (NativeRowAdapter)
+                  ((RecyclerView) activity.home.findViewById(R.id.home_rows)).getAdapter();
+          java.util.List<NativeCard> inputs = home.getCurrentList().get(4).cards;
+          assertEquals("No devices leaves only the system input-menu fallback", 1, inputs.size());
+          assertEquals("control:input-menu", inputs.get(0).id);
           assertEquals(
               before,
               ((android.widget.ImageView) activity.home.findViewById(R.id.home_wallpaper))
@@ -997,9 +1035,13 @@ public class NativeHomeViewTest {
               Math.round(activity.home.getHeight() * .15f));
         });
     instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT);
-    NativeUiTestDriver.awaitFocus(instrumentation, activity, "control:system-settings");
-    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_CENTER);
-    main(() -> assertEquals("system-settings", activity.launches.get(1)));
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "control:input-menu");
+    main(
+        () ->
+            assertEquals(
+                "Header Settings remains available",
+                "Settings",
+                activity.home.findViewById(R.id.nav_settings).getContentDescription()));
   }
 
   private static void assertContinuousScroll(java.util.List<Integer> deltas) {
