@@ -21,7 +21,7 @@ button.tv-focused:not(.dot){transform:translateY(-2px)}
 /* Large-TV hierarchy and an elevated, neutral focus treatment requested after remote testing. */
 .hero-copy{top:220px;width:56%;max-width:1050px}.hero-copy h1{font-size:48px;line-height:56px}.hero-copy .description,.modal p,.settings p{font-size:24px;line-height:30px}.hero-copy .description{max-width:960px}.meta{font-size:22px;line-height:28px}.eyebrow{font-size:17px;line-height:23px}.primary,.secondary,.card h3,.resume-title{font-size:22px;line-height:28px}.section-head h2,.queue-head h2{font-size:31px;line-height:38px}.section-head p,.resume-sub,.resume-time,.card p,.status-note{font-size:18px;line-height:25px}.clock strong{font-size:31px}.clock span,.weather strong{font-size:20px}.weather small{font-size:17px}.modal h2{font-size:48px;line-height:56px}.search-input{font-size:30px;line-height:38px}.search-panel .results{font-size:22px}.settings input{font-size:23px;line-height:30px}.settings .status-note,.modal .status-note{font-size:18px;line-height:25px}.queue{width:420px;right:5%;top:150px;height:520px}.queue-scroll{height:414px}.queue-head{gap:8px}.queue-head h2{font-size:27px;line-height:34px}.resume-title{white-space:normal}.resume-sub{font-size:18px}.home-apps .card h3{font-size:21px;line-height:27px}.home-apps .card{flex-basis:220px}.home-row{padding-top:15px;padding-bottom:20px}
 button:focus-visible,input:focus-visible,a:focus-visible,button.tv-focused,#heroCopy.tv-focused{outline:none;outline-offset:0}
-button,.card,.resume{transition:transform 230ms ease,box-shadow 230ms ease,background-color 230ms ease}
+button,.card,.resume{transition:transform 115ms ease,box-shadow 115ms ease,background-color 115ms ease}
 button.tv-focused:not(.dot){transform:translateY(-3px) scale(1.04);box-shadow:0 10px 30px #0008,0 0 0 2px #ffffff75,0 0 24px #ffffff20}
 .card.tv-focused{transform:translateY(-4px) scale(1.05);box-shadow:none}.card.tv-focused .card-art{transform:none;box-shadow:0 14px 34px #0009,0 0 0 2px #ffffffe0,0 0 27px #ffffff20}
 .resume.tv-focused{transform:scale(1.035);background:#ffffff16;box-shadow:0 12px 28px #0008,0 0 0 2px #ffffffb0,0 0 22px #ffffff15}
@@ -51,7 +51,7 @@ input:focus-visible{box-shadow:0 0 0 2px #ffffffd0,0 8px 24px #0006}.dot.tv-focu
 .queue .resume-info{display:block;width:100%;margin:17px 0 0}.queue .resume-title{font-size:24px;line-height:30px;-webkit-line-clamp:2}.queue .resume-time{margin-top:7px;font-size:19px;line-height:25px}.queue .resume-sub{display:block;margin-top:5px;font-size:18px;line-height:25px;align-self:auto}
 .queue .progress{z-index:2;position:absolute;left:14px;right:14px;bottom:13px;height:5px;margin:0;background:#ffffff55;border-radius:4px;overflow:hidden}.queue .progress i{display:block;height:100%;background:#fff}
 .queue .resume.tv-focused{transform:scale(1.025);background:transparent;box-shadow:none}.queue .resume.tv-focused .resume-art{box-shadow:0 12px 24px #0009}.queue .resume-play{border:0}
-.card{transform-origin:center center;will-change:transform}.card.tv-focused{transform:translateY(-6px) scale(1.09);box-shadow:none;z-index:2}.card.tv-focused .card-art{box-shadow:0 20px 35px #000a;border:0}.card.tv-focused .card-art:after{opacity:0}.home-row,.rail{padding-top:25px;padding-bottom:25px}.card,.card-art{transition:transform 260ms cubic-bezier(.2,.8,.2,1),box-shadow 260ms ease}
+.card{transform-origin:center center;will-change:transform}.card.tv-focused{transform:translateY(-6px) scale(1.09);box-shadow:none;z-index:2}.card.tv-focused .card-art{box-shadow:0 20px 35px #000a;border:0}.card.tv-focused .card-art:after{opacity:0}.home-row,.rail{padding-top:25px;padding-bottom:25px}.card,.card-art{transition:transform 130ms cubic-bezier(.2,.8,.2,1),box-shadow 130ms ease}
 .dots .dot{position:relative;overflow:hidden}.dots .dot.selected{width:42px;background:#ffffff40}.dots .dot.selected:after{content:'';position:absolute;inset:0 auto 0 0;width:var(--gallery-progress,0%);background:white;border-radius:inherit}
 @media(max-width:1000px){.queue{width:38%;right:3%;}.queue .resume{flex-basis:85%;width:85%}.queue .resume-art{height:180px}.queue-head h2{font-size:25px}}
 @media(max-width:720px){.queue{position:relative;top:auto;right:auto;width:88%;margin:8px 6% 34px}.queue .resume{flex-basis:80%;width:80%}}
@@ -66,7 +66,7 @@ button.card.tv-focused .card-art{border:0;box-shadow:0 20px 35px #000a}
 #queueBackdrop{position:absolute;inset:-50px;background-size:cover;background-position:center;filter:blur(35px);opacity:.65;transform:scale(1.15)}
 .queue-material:after{content:'';position:absolute;inset:0;background:linear-gradient(120deg,#10131b99,#10131bcc)}
 .queue-head{padding-right:80px}.queue-scroll{height:470px;gap:15px;padding-left:28px;padding-right:28px}.queue .resume{flex-basis:360px;width:360px;height:430px;transform:none;background:none;box-shadow:none}
-.queue .resume-art{height:203px;transform:scale(.82);transform-origin:center center;transition:transform 260ms cubic-bezier(.2,.8,.2,1),box-shadow 260ms ease}
+.queue .resume-art{height:203px;transform:scale(.82);transform-origin:center center;transition:transform 130ms cubic-bezier(.2,.8,.2,1),box-shadow 130ms ease}
 .queue .resume.is-selected .resume-art{transform:scale(1);box-shadow:0 14px 28px #0007}
 .queue .resume-info,.queue .resume-sub{visibility:hidden}.queue .resume.is-selected .resume-info,.queue .resume.is-selected .resume-sub{visibility:visible}
 .queue .resume.tv-focused{transform:none;background:none;box-shadow:none}.queue .resume-info{margin-top:16px}.resume-episode{display:block;font-size:18px;line-height:24px;color:#ccc;margin-top:5px}.queue .resume-time{margin-top:5px}
@@ -79,13 +79,13 @@ button.card.tv-focused .card-art{border:0;box-shadow:0 20px 35px #000a}
 .hero{height:710px}.hero-bottom{bottom:50px}
 .home-row,.rail{display:flex;align-items:flex-end;gap:20px;overflow-x:auto;scroll-snap-type:none;padding:25px 6px 20px}
 .home-row{min-height:302px}.home-apps .home-row{min-height:248px}.rail{min-height:420px}
-.home-row button.card,.rail button.card{flex:0 0 260px;width:260px;min-width:0;transform:none;transition:flex-basis 280ms cubic-bezier(.2,.8,.2,1),width 280ms cubic-bezier(.2,.8,.2,1);will-change:auto}
-.home-row button.card .card-art{height:146px;aspect-ratio:auto;transition:height 280ms cubic-bezier(.2,.8,.2,1),box-shadow 280ms ease;transform:none}
+.home-row button.card,.rail button.card{flex:0 0 260px;width:260px;min-width:0;transform:none;transition:flex-basis 140ms cubic-bezier(.2,.8,.2,1),width 140ms cubic-bezier(.2,.8,.2,1);will-change:auto}
+.home-row button.card .card-art{height:146px;aspect-ratio:auto;transition:height 140ms cubic-bezier(.2,.8,.2,1),box-shadow 140ms ease;transform:none}
 .home-row button.card.tv-focused{flex-basis:343px;width:343px;transform:none;box-shadow:none}
 .home-row button.card.tv-focused .card-art{height:193px;transform:none;box-shadow:0 18px 34px #0009}
 .home-apps .home-row button.card{flex-basis:220px;width:220px}.home-apps .home-row button.card .card-art{height:124px}
 .home-apps .home-row button.card.tv-focused{flex-basis:290px;width:290px}.home-apps .home-row button.card.tv-focused .card-art{height:164px}
-.rail button.card{flex-basis:400px;width:400px}.rail button.card .card-art{height:225px;aspect-ratio:auto;transform:none;transition:height 280ms cubic-bezier(.2,.8,.2,1),box-shadow 280ms ease}
+.rail button.card{flex-basis:400px;width:400px}.rail button.card .card-art{height:225px;aspect-ratio:auto;transform:none;transition:height 140ms cubic-bezier(.2,.8,.2,1),box-shadow 140ms ease}
 .rail button.card.tv-focused{flex-basis:528px;width:528px;transform:none;box-shadow:none}.rail button.card.tv-focused .card-art{height:297px;transform:none;box-shadow:0 18px 34px #0009}
 .home-row .card h3,.rail .card h3{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.home-row .card p,.rail .card p{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:25px}
 /* The material stays fixed while the thumbnail viewport reveals neighboring items. */
@@ -105,7 +105,7 @@ button.card.tv-focused .card-art{border:0;box-shadow:0 20px 35px #000a}
 .queue-scroll{height:230px;padding-bottom:15px}
 .queue .resume{height:203px}
 .queue .resume.is-selected .resume-art{transform:scale(1);box-shadow:0 14px 28px #0007}
-.queue .resume-art{transition:transform 150ms cubic-bezier(.2,.8,.2,1),box-shadow 150ms ease}
+.queue .resume-art{transition:transform 75ms cubic-bezier(.2,.8,.2,1),box-shadow 75ms ease}
 .queue-details{position:absolute;left:28px;right:28px;top:320px;bottom:20px;display:flex;flex-direction:column}
 .queue-details .resume-info{visibility:visible;margin:0;width:360px;max-width:100%}
 .queue-details .resume-sub{visibility:visible;margin-top:auto;padding-bottom:7px}
@@ -119,7 +119,7 @@ button.card.tv-focused .card-art{border:0;box-shadow:0 20px 35px #000a}
 
 /* A shared animation clock keeps outgoing and incoming layout widths complementary. */
 .home-row button.card,.rail button.card{transition:none}
-.home-row button.card .card-art,.rail button.card .card-art{transition:box-shadow 280ms ease}
+.home-row button.card .card-art,.rail button.card .card-art{transition:box-shadow 140ms ease}
 
 /* Published artwork is loaded lazily; the existing dark artwork surface is the placeholder. */
 .provider-row .card-art{position:relative;overflow:hidden;background-color:#17191d}.shared-art{display:block;width:100%;height:100%;object-fit:cover;position:absolute;inset:0}.resume-art{position:relative}.provider-row .poster-card{flex-basis:180px}.provider-row .poster-card .card-art{aspect-ratio:2/3}.provider-row .card h3,.provider-row .card p{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.provider-row{align-items:flex-start;scroll-padding-inline:20px}.provider-row .card{text-align:start}.provider-row .card.tv-focused .card-art{box-shadow:0 20px 35px #000a,0 0 0 2px #ffffffc0}
@@ -128,10 +128,34 @@ button.card.tv-focused .card-art{border:0;box-shadow:0 20px 35px #000a}
 /* Keep neighbor previews inside the panel's rounded clipping boundary. */
 .queue-scroll{position:absolute;left:0;top:94px;width:100%;height:230px;padding:12px 0 15px;display:block;overflow:hidden;scroll-padding:0}
 .queue-scroll:after{display:none}
-.queue-track{position:relative;display:flex;gap:15px;width:max-content;padding:0 0 0 28px;transition:transform 150ms cubic-bezier(.2,.8,.2,1);will-change:transform}
+.queue-track{position:relative;display:flex;gap:15px;width:max-content;padding:0 0 0 28px;transition:transform 75ms cubic-bezier(.2,.8,.2,1);will-change:transform}
 .queue-scroll>.empty{margin:0 28px;padding-top:20px}
 @media(min-width:1001px){.hero-copy{width:54%}}
 
 /* Action focus and slide selection are separate D-pad rows. */
 #heroCopy .actions button.tv-focused{outline:2px solid #fff;outline-offset:5px;box-shadow:0 10px 30px #0008,0 0 24px #ffffff35}
 .dots .dot.tv-focused{outline:2px solid #fff;outline-offset:5px;transform:scale(1.15);box-shadow:0 0 14px #fff7}
+
+/* Fast, coordinated feedback; reduced-motion rules continue to take precedence. */
+button{transition-duration:125ms}.backdrop{transition:opacity 375ms,transform 4s}.hero-copy{animation-duration:500ms}.overlay{animation-duration:125ms}.modal{animation-duration:175ms}.toast{animation-duration:100ms}.resume-play,.card-art:after{transition-duration:100ms}
+/* Carousel selection uses fill instead of a border or focus ring. */
+#heroCopy .actions button{border:0;outline:none;box-shadow:none;background:#ffffff1c;color:#fff}
+#heroCopy .actions button.tv-focused{border:0;outline:none;background:#fff;color:#151517;box-shadow:0 10px 30px #0008}
+/* Search is a page beside Home, with persistent main navigation. */
+[hidden]{display:none!important}.search-page{padding:165px 6% 60px;min-height:100vh}.search-page h1{font-size:48px;line-height:56px;margin:18px 0}.search-page .search-input{max-width:1100px;margin:15px 0 35px}.search-page .results{grid-template-columns:repeat(4,minmax(0,1fr));gap:35px 25px}.search-page .card-art{aspect-ratio:16/9}.search-page .empty{padding:20px 0}.ambient{gap:28px}.clock strong{font-size:56px;line-height:62px;font-weight:600}.clock span{font-size:18px;line-height:25px}.weather{max-width:300px}
+@media(max-width:1000px){.clock strong{font-size:42px;line-height:48px}.search-page .results{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:720px){.clock strong{font-size:32px;line-height:38px}.ambient{gap:14px}.weather strong{font-size:16px}.weather small{font-size:14px}.search-page{padding-top:145px}.search-page .results{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Give featured artwork the first screen, with its details near the lower third. */
+.hero{height:max(980px,105vh)}
+.hero-copy{top:70vh;width:76%;max-width:1100px;transform:none}
+.hero-bottom{bottom:35px}
+@media(max-width:720px){.hero{height:max(920px,115vh)}.hero-copy{width:88%;top:65vh;transform:none}}
+/* Media uses portrait posters; installed apps keep their native app artwork. */
+.rail button.card.poster-card,.provider-row button.card.poster-card{flex-basis:200px;width:200px}
+.rail button.card.poster-card .card-art,.provider-row button.card.poster-card .card-art{height:300px;aspect-ratio:2/3}
+.rail button.card.poster-card.tv-focused,.provider-row button.card.poster-card.tv-focused{flex-basis:250px;width:250px}
+.rail button.card.poster-card.tv-focused .card-art,.provider-row button.card.poster-card.tv-focused .card-art{height:375px}
+.provider-row{min-height:465px;align-items:flex-end}.rail{min-height:465px}
+.search-page .poster-card .card-art{aspect-ratio:2/3}
+.home-row,.rail{overflow-anchor:none}

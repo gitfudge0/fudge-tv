@@ -32,7 +32,7 @@ public final class MainActivity extends Activity {
     private final Map<String,Library.Program> programs=new HashMap<>();
     private final Map<String,Library.App> apps=new HashMap<>();
     private final Map<String,JSONObject> titles=new LinkedHashMap<>();
-    private boolean resumed,pageReady,textEditing;private int libraryGeneration,catalogGeneration,searchGeneration,detailsGeneration,weatherGeneration;
+    private boolean resumed,pageReady,textEditing,pendingHome;private int libraryGeneration,catalogGeneration,searchGeneration,detailsGeneration,weatherGeneration;
     private Future<?> searchTask,detailsTask,libraryTask;
     private CancellationSignal libraryCancellation;
     private final RecommendationRefresh recommendationRefresh=new RecommendationRefresh(new RecommendationRefresh.Scheduler(){
@@ -106,7 +106,7 @@ public final class MainActivity extends Activity {
     private static WebResourceResponse denied(){return new WebResourceResponse("text/plain","UTF-8",403,"Blocked",Collections.singletonMap("Cache-Control","no-store"),new ByteArrayInputStream(new byte[0]));}
     private void handle(String op,JSONObject data){
         switch(op){
-            case "ready":pageReady=true;sendConfig();refreshLibrary();loadHome();loadWeather(city());break;
+            case "ready":pageReady=true;if(pendingHome){pendingHome=false;send("home",new JSONObject());}sendConfig();refreshLibrary();loadHome();loadWeather(city());break;
             case "watchMetadata":loadWatchMetadata(data.optString("id"),data.optString("key"));break;
             case "resume":Library.Program p=programs.get(data.optString("id"));if(p!=null)launchRecommendation(p);break;
             case "launchApp":Library.App a=apps.get(data.optString("package"));if(a!=null&&Policy.safeUserApp(a.id,a.launch==null?"":String.valueOf(a.launch.getComponent()),a.label))launch(a.launch,a.id);break;
@@ -192,6 +192,7 @@ public final class MainActivity extends Activity {
     private void toast(String value){Toast.makeText(this,value,Toast.LENGTH_LONG).show();}
     private void safeUiFailure(){new AlertDialog.Builder(this).setTitle("Fudge Launcher").setMessage("The local presentation could not load. TV settings and installed apps remain available.").setPositiveButton("Retry",(d,w)->recreate()).setNeutralButton("TV controls",(d,w)->controls()).setCancelable(false).show();}
     private void recordMetrics(JSONObject incoming){try{JSONObject safe=new JSONObject();for(String key:new String[]{"innerWidth","innerHeight","dpr","scale","fontSize","lineHeight","fontWeight","bodyFontSize","bodyLineHeight","scrollY"}){double value=incoming.optDouble(key,Double.NaN);if(Double.isFinite(value))safe.put(key,value);}JSONObject types=incoming.optJSONObject("typeMetrics"),safeTypes=new JSONObject();if(types!=null)for(String key:new String[]{"description","primary","queueHead","resumeTitle","resumeSub","appTitle","modalTitle","search"}){JSONArray values=types.optJSONArray(key);if(values!=null&&values.length()==2){JSONArray bounded=new JSONArray();for(int i=0;i<2;i++){double value=values.optDouble(i);bounded.put(Double.isFinite(value)?Math.max(0,Math.min(200,value)):0);}safeTypes.put(key,bounded);}}safe.put("typeMetrics",safeTypes);String zone=incoming.optString("focusZone");safe.put("focusZone",java.util.Arrays.asList("gallery","nav","queue","apps","content","modal","none").contains(zone)?zone:"none");safe.put("interLoaded",incoming.optBoolean("interLoaded"));safe.put("fontFamily",incoming.optString("fontFamily").startsWith("Inter")?"Inter":"fallback");for(String key:new String[]{"hero","copy","queue","nav","rail"}){JSONArray value=incoming.optJSONArray(key);if(value!=null&&value.length()==4){JSONArray rect=new JSONArray();for(int i=0;i<4;i++)rect.put(Math.max(-10000,Math.min(10000,value.optDouble(i))));safe.put(key,rect);}}Log.i("FudgeViewport",safe.toString());}catch(JSONException ignored){}}
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);if(Intent.ACTION_MAIN.equals(intent.getAction())&&intent.hasCategory(Intent.CATEGORY_HOME)){if(pageReady)send("home",new JSONObject());else pendingHome=true;}}
     @Override protected void onResume(){super.onResume();resumed=true;observeRecommendations();if(web!=null)web.onResume();if(pageReady){sendConfig();refreshLibrary();loadHome();loadWeather(city());send("lifecycle",object("active",true));}}
     @Override protected void onPause(){resumed=false;if(searchTask!=null)searchTask.cancel(true);if(detailsTask!=null)detailsTask.cancel(true);stopObservingRecommendations();cancelLibrary();libraryGeneration++;catalogGeneration++;searchGeneration++;detailsGeneration++;weatherGeneration++;if(pageReady)send("lifecycle",object("active",false));if(web!=null)web.onPause();super.onPause();}
     @Override protected void onDestroy(){stopObservingRecommendations();cancelLibrary();pageReady=false;main.removeCallbacksAndMessages(null);libraryExecutor.shutdownNow();network.shutdownNow();if(web!=null){web.stopLoading();web.destroy();web=null;}super.onDestroy();}

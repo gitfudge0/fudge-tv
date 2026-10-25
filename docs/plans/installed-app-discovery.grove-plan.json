@@ -1,0 +1,498 @@
+{
+  "schema_version": 1,
+  "plan_id": "installed-app-discovery",
+  "revision_id": "installed-app-discovery-20261025-r1",
+  "title": "Installed App Discovery in Fudge",
+  "summary": "Show recommendations actually published by installed apps and search the public content surfaces those apps expose. Probe access first; ordinary launcher access cannot guarantee Google TV proprietary search coverage. Planning only: no implementation is authorized by review feedback.",
+  "sources": [
+    {
+      "id": "request",
+      "title": "User request",
+      "text": "Currently we do not show recommendations from our installed apps. Let's show them and also when we are searching, let's make search work across those apps as well, just like how Google TV or Android TV would do it in their native search. Plan this first"
+    },
+    {
+      "id": "repo-home",
+      "title": "Existing home recommendations",
+      "path": "app/src/main/assets/ui/app.js:46"
+    },
+    {
+      "id": "repo-search",
+      "title": "Existing app-name and Cinemeta search",
+      "path": "app/src/main/assets/ui/app.js:57"
+    },
+    {
+      "id": "repo-native",
+      "title": "Native search currently calls Cinemeta only",
+      "path": "app/src/main/java/local/tv/launcher/MainActivity.java:143"
+    },
+    {
+      "id": "repo-refresh",
+      "title": "Existing refresh, cancellation and snapshot bridge",
+      "path": "app/src/main/java/local/tv/launcher/MainActivity.java:131"
+    },
+    {
+      "id": "repo-library",
+      "title": "Installed app discovery and recommendation snapshot",
+      "path": "app/src/main/java/local/tv/launcher/Library.java:54"
+    },
+    {
+      "id": "repo-policy",
+      "title": "Seven retained packages and owner validation",
+      "path": "app/src/main/java/local/tv/launcher/Policy.java:10"
+    },
+    {
+      "id": "repo-doc",
+      "title": "Prior Sony evidence and remaining device checks",
+      "path": "docs/recommendations.md:23"
+    },
+    {
+      "id": "android-search",
+      "title": "Android TV searchable content",
+      "url": "https://developer.android.com/training/tv/discovery/searchable"
+    },
+    {
+      "id": "android-channels",
+      "title": "Android TV recommendation channels",
+      "url": "https://developer.android.com/training/tv/discovery/recommendations-channel"
+    },
+    {
+      "id": "android-search-manager",
+      "title": "SearchManager reference",
+      "url": "https://developer.android.com/reference/android/app/SearchManager"
+    },
+    {
+      "id": "android-searchable-info",
+      "title": "SearchableInfo reference",
+      "url": "https://developer.android.com/reference/android/app/SearchableInfo"
+    },
+    {
+      "id": "repo-launch",
+      "title": "Existing owner-safe content launch and app fallback",
+      "path": "app/src/main/java/local/tv/launcher/MainActivity.java:152"
+    }
+  ],
+  "changes": [
+    {
+      "kind": "add",
+      "path": "app/src/main/java/local/tv/launcher/SourceCapabilities.java",
+      "detail": "Proposed name: capability discovery and per-app evidence."
+    },
+    {
+      "kind": "add",
+      "path": "app/src/main/java/local/tv/launcher/AppSearch.java",
+      "detail": "Proposed name: exported searchable provider adapter and safe query mapping."
+    },
+    {
+      "kind": "add",
+      "path": "app/src/main/java/local/tv/launcher/SearchCoordinator.java",
+      "detail": "Proposed name: bounded independent tasks and incremental results."
+    },
+    {
+      "kind": "modify",
+      "path": "app/src/main/java/local/tv/launcher/MainActivity.java",
+      "detail": "Typed bridge state, cancellation and native launch registry."
+    },
+    {
+      "kind": "modify",
+      "path": "app/src/main/java/local/tv/launcher/Library.java",
+      "detail": "Shared source models and published-content index."
+    },
+    {
+      "kind": "modify",
+      "path": "app/src/main/java/local/tv/launcher/BridgePolicy.java",
+      "detail": "Review allowed capabilities/search actions and validate bridge payload bounds."
+    },
+    {
+      "kind": "modify",
+      "path": "app/src/main/java/local/tv/launcher/Recommendations.java",
+      "detail": "Reuse reader, expose per-owner source states."
+    },
+    {
+      "kind": "modify",
+      "path": "app/src/main/java/local/tv/launcher/Policy.java",
+      "detail": "Source eligibility and owner validation; widen only if chosen."
+    },
+    {
+      "kind": "modify",
+      "path": "app/src/main/AndroidManifest.xml",
+      "detail": "Minimum package/provider visibility justified by discovered public contracts."
+    },
+    {
+      "kind": "modify",
+      "path": "app/src/main/assets/ui/app.js",
+      "detail": "Home states and incremental multi-source search."
+    },
+    {
+      "kind": "modify",
+      "path": "app/src/main/assets/ui/functional.css",
+      "detail": "Source sections, status and remote focus styling."
+    },
+    {
+      "kind": "modify",
+      "path": "tests and app/src/test plus app/src/androidTest",
+      "detail": "Proposed test additions; exact files follow capability evidence."
+    },
+    {
+      "kind": "modify",
+      "path": "docs/recommendations.md",
+      "detail": "Actual per-app support matrix and explicit remaining coverage gaps."
+    }
+  ],
+  "claims": [
+    {
+      "id": "home",
+      "text": "Home shows recommendations actually shared by installed apps.",
+      "detail": "The launcher already reads preview channels and Watch Next; investigate why installed publishers produce no visible rows before adding a parallel feed. Keep Continue Watching separate and Cinemeta explicitly labeled.",
+      "exhibit": {
+        "type": "layout",
+        "nodes": [
+          {
+            "id": "home-mock",
+            "kind": "column",
+            "children": [
+              {
+                "id": "home-mock-0",
+                "kind": "text",
+                "text": "Conceptual Home \u00b7 sample titles illustrative"
+              },
+              {
+                "id": "home-mock-1",
+                "kind": "surface",
+                "text": "Your apps \u00b7 Stremio | Netflix | YouTube"
+              },
+              {
+                "id": "home-mock-2",
+                "kind": "surface",
+                "text": "Continue Watching \u00b7 accessible Watch Next items"
+              },
+              {
+                "id": "home-mock-3",
+                "kind": "surface",
+                "text": "YouTube \u00b7 Shared by this app\n[Illustrative published title] [Illustrative published title]"
+              },
+              {
+                "id": "home-mock-4",
+                "kind": "surface",
+                "text": "Other app recommendations \u00b7 No shared recommendations available\nView source access in Settings"
+              },
+              {
+                "id": "home-mock-5",
+                "kind": "surface",
+                "text": "Discover with Cinemeta \u00b7 catalog metadata"
+              }
+            ]
+          }
+        ]
+      },
+      "children": [
+        {
+          "id": "home-capability",
+          "text": "Actual launcher access determines each source\u2019s capability.",
+          "detail": "First implementation gate: probe preview channels, Watch Next, exported searchable providers and registered search activities for every installed app in the chosen scope, using the launcher UID. Record model/API, package version, permission state, source state and count; do not log query histories. docs/recommendations.md:23 reports historical Sony API 31 preview channels empty and Watch Next available; this is not a current device check.",
+          "exhibit": {
+            "type": "calls",
+            "entries": [
+              {
+                "id": "1",
+                "title": "Discover installed owners",
+                "detail": "Use Library.java:54 and Policy.java:10; resolve actual installed packages."
+              },
+              {
+                "id": "2",
+                "title": "Probe public surfaces",
+                "detail": "Read TV Provider and SearchManager/SearchableInfo contracts as the launcher, not a shell UID."
+              },
+              {
+                "id": "3",
+                "title": "Record honest capabilities",
+                "detail": "Available, empty, restricted, unsupported and temporarily unavailable are distinct. No accessible publisher means a fallback, not successful app coverage."
+              }
+            ]
+          }
+        },
+        {
+          "id": "home-reuse",
+          "text": "Existing refresh and preferences continue controlling recommendation rows.",
+          "detail": "Reuse Recommendations.java:27, Library.java:76 and MainActivity.java:38\u201352,131. Extend source statuses rather than replacing the observer lifecycle. Package changes invalidate capabilities and stale launch records. Empty or restricted sources remain understandable in Settings.",
+          "exhibit": {
+            "type": "calls",
+            "entries": [
+              {
+                "id": "1",
+                "title": "Load",
+                "detail": "Reuse TV Provider readers and native opaque IDs."
+              },
+              {
+                "id": "2",
+                "title": "Refresh",
+                "detail": "Keep cancellation, generation guards, lifecycle observers and debouncing."
+              },
+              {
+                "id": "3",
+                "title": "Filter",
+                "detail": "Respect global recommendations, Continue Watching, row visibility, ordering and item limits."
+              }
+            ]
+          }
+        }
+      ],
+      "decisions": [
+        {
+          "id": "app-coverage",
+          "prompt": "Which installed apps should publish searchable content and recommendations here?",
+          "options": [
+            {
+              "id": "retained-seven",
+              "label": "Seven retained apps (Recommended)",
+              "description": "Stremio, Crunchyroll, Netflix, Prime Video, JioHotstar, YouTube and Apple TV; only installed and publicly accessible sources participate."
+            },
+            {
+              "id": "safe-tv-apps",
+              "label": "All safe launchable TV apps",
+              "description": "Deliberately extend the content-owner allowlist, capability discovery, package visibility and verification to safe exported TV launchers."
+            }
+          ],
+          "default": "retained-seven"
+        }
+      ]
+    },
+    {
+      "id": "search",
+      "text": "One search returns accessible results across installed apps.",
+      "detail": "Search app names locally, indexed accessible preview/Watch Next content locally, and exported public app suggestion providers where supported. Keep Cinemeta as a separate catalog source; a matching movie title never proves availability or subscription access.",
+      "exhibit": {
+        "type": "layout",
+        "nodes": [
+          {
+            "id": "search-mock",
+            "kind": "column",
+            "children": [
+              {
+                "id": "search-mock-0",
+                "kind": "text",
+                "text": "Conceptual Search \u00b7 \u201cspace\u201d \u00b7 sample titles illustrative"
+              },
+              {
+                "id": "search-mock-1",
+                "kind": "control",
+                "text": "Search apps and titles: space"
+              },
+              {
+                "id": "search-mock-2",
+                "kind": "surface",
+                "text": "Apps \u00b7 [Matching installed app \u00b7 Open app]"
+              },
+              {
+                "id": "search-mock-3",
+                "kind": "surface",
+                "text": "YouTube \u00b7 [Illustrative provider result \u00b7 Open in YouTube]"
+              },
+              {
+                "id": "search-mock-4",
+                "kind": "surface",
+                "text": "Other app \u00b7 Searching\u2026 | Source temporarily unavailable"
+              },
+              {
+                "id": "search-mock-5",
+                "kind": "surface",
+                "text": "Cinemeta catalog \u00b7 [Illustrative title \u00b7 Details]"
+              },
+              {
+                "id": "search-mock-6",
+                "kind": "text",
+                "text": "Results arrive independently; unavailable sources do not erase usable results."
+              }
+            ]
+          }
+        ]
+      },
+      "children": [
+        {
+          "id": "search-adapters",
+          "text": "Each source returns independent bounded results.",
+          "detail": "Discover SearchableInfo through SearchManager; resolve its suggestion authority and verify owner, exported state and read permissions. Build the query using declared suggestion path and selection, with the query as a selection argument or encoded path as declared. Bound rows, cursor lifetime, payloads and artwork. Use native CancellationSignal where supported; deadlines are best effort because providers may ignore cancellation. Isolate stuck work and cap concurrency so it cannot exhaust the launcher. Global-search enumeration discovers candidates only; it does not prove that another UID can read their providers.",
+          "exhibit": {
+            "type": "calls",
+            "entries": [
+              {
+                "id": "1",
+                "title": "Start generation",
+                "detail": "Cancel old work; dispatch local index, each eligible provider and Cinemeta independently."
+              },
+              {
+                "id": "2",
+                "title": "Query declared contract",
+                "detail": "Validate provider ownership and permissions, honor declared path/selection and minimum query threshold; no guessed private endpoints."
+              },
+              {
+                "id": "3",
+                "title": "Publish partial state",
+                "detail": "Per-source pending/available/empty/error/unsupported states plus request ID; generation and lifecycle guards discard stale updates."
+              }
+            ]
+          }
+        },
+        {
+          "id": "search-identity",
+          "text": "Results retain their app owner and stable identity.",
+          "detail": "Deduplicate within an owner using stable source ID or validated URI; never collapse different apps by title. Keep native launch objects behind opaque result IDs. The web layer receives display metadata, owner and explicit action kind only.",
+          "exhibit": {
+            "type": "schema",
+            "text": "// Proposed Java model sketch\nfinal class SearchResult {\n  String opaqueId, owner, sourceId, title, artwork;\n  ActionKind action; // CONTENT, SEARCH_IN_APP, OPEN_APP, CATALOG_DETAILS\n}\n// Native registry: opaqueId -> validated owner + launch intent\n// Identity: owner + stable source ID/validated URI\n// Source status belongs to each request generation."
+          }
+        }
+      ],
+      "decisions": [
+        {
+          "id": "search-presentation",
+          "prompt": "How should cross-app search results be presented?",
+          "options": [
+            {
+              "id": "grouped",
+              "label": "Group by app (Recommended)",
+              "description": "Source sections make partial loading, access restrictions and ownership clear; Cinemeta remains separate."
+            },
+            {
+              "id": "merged",
+              "label": "Merge with app badges",
+              "description": "Use stable source-aware ranking and visible owner badges; keep per-source status visible and Cinemeta separate."
+            }
+          ],
+          "default": "grouped"
+        }
+      ]
+    },
+    {
+      "id": "launch",
+      "text": "Every result opens an explicitly identified destination.",
+      "detail": "Content actions use owner-validated native intents associated with opaque IDs. Only offer Search in app when the app has a verified registered search activity supporting the query. Otherwise show Open app; this action never claims to transfer a query or play a title.",
+      "exhibit": {
+        "type": "calls",
+        "entries": [
+          {
+            "id": "1",
+            "title": "Select content",
+            "detail": "Resolve opaque ID in the active native registry; reject stale, removed or disabled sources."
+          },
+          {
+            "id": "2",
+            "title": "Validate launch",
+            "detail": "Restrict explicit package/component, resolved exported activity and permitted schemes to the source owner; reuse Recommendations validatedLink policy."
+          },
+          {
+            "id": "3",
+            "title": "Select search or fallback",
+            "detail": "Use only verified registered search contracts. On failure offer a clear Open app action or recoverable message."
+          }
+        ]
+      },
+      "children": [
+        {
+          "id": "launch-evidence",
+          "text": "A live launch must verify the intended destination.",
+          "detail": "Test a real content result, verified search-in-app action if present, broken link, removed package and mismatched owner. Revalidate after package updates. Native validation tests establish policy behavior; only a device launch establishes the app destination.",
+          "exhibit": {
+            "type": "code",
+            "language": "text",
+            "text": "Existing boundaries:\napp/src/main/java/local/tv/launcher/Policy.java:14 \u00b7 ownerAllowed\napp/src/main/java/local/tv/launcher/Policy.java:22 \u00b7 resolvedOwnerAllowed\napp/src/main/java/local/tv/launcher/Library.java:79 \u00b7 validatedResume\nProposed: separate verified search-intent validation from content links."
+          }
+        }
+      ]
+    },
+    {
+      "id": "remote",
+      "text": "Search and recommendations remain usable with the TV remote.",
+      "detail": "Preserve stable focus keys while partial results arrive. Keep focus on the current result when possible and choose a deterministic neighbor when removed. Back cancels work and restores the previous focus. Settings exposes per-source search participation and capability explanations; reuse recommendation controls and bounded artwork caching.",
+      "exhibit": {
+        "type": "calls",
+        "entries": [
+          {
+            "id": "1",
+            "title": "Loading or empty",
+            "detail": "Show source-specific loading and no-results text without trapping focus."
+          },
+          {
+            "id": "2",
+            "title": "Offline or partial failure",
+            "detail": "Local apps and published-content matches remain usable; failed sources have recoverable status."
+          },
+          {
+            "id": "3",
+            "title": "Navigate and return",
+            "detail": "D-pad moves through sections; incremental updates do not steal focus; Back restores the invoking control."
+          }
+        ]
+      },
+      "children": [
+        {
+          "id": "remote-verification",
+          "text": "Native UI checks establish remote usability.",
+          "detail": "Inspect actual home and search screens with D-pad: partial arrival, rapid query changes, close/reopen, empty/restricted/offline sources, missing artwork, long labels, RTL, removed results and return from launched apps. Keep this outcome separate from provider/API verification.",
+          "exhibit": {
+            "type": "schema",
+            "text": "UI acceptance record:\n- Device, firmware/API, app build\n- Home and search screenshots\n- D-pad traversal and Back behavior\n- Focus before/after incremental refresh\n- Loading, empty, offline, partial-failure states\n- Artwork bounds and long-row behavior"
+          }
+        }
+      ]
+    },
+    {
+      "id": "delivery",
+      "text": "Capability evidence gates implementation and coverage claims.",
+      "detail": "Sequence work by observable outcomes. Do not label universal app search successful when providers are unavailable. A restricted source can pass graceful-fallback acceptance while actual app coverage remains explicitly unmet.",
+      "exhibit": {
+        "type": "calls",
+        "entries": [
+          {
+            "id": "1",
+            "title": "1 \u00b7 Capture capability evidence",
+            "detail": "Probe chosen installed apps from launcher UID; agree achievable app coverage from recorded contracts."
+          },
+          {
+            "id": "2",
+            "title": "2 \u00b7 Build shared source models and adapters",
+            "detail": "Add bounded query coordination, owner identity, cancellation and launch validation; names in Changes are proposals."
+          },
+          {
+            "id": "3",
+            "title": "3 \u00b7 Integrate Home, Search and Settings",
+            "detail": "Reuse existing recommendation lifecycle and render independent app sources with the selected presentation."
+          },
+          {
+            "id": "4",
+            "title": "4 \u00b7 Verify local behavior and release",
+            "detail": "Meaningful Java/JS tests: malformed provider rows, permissions, identities, wrong owners, ignored cancellation/stale generations, partial sources and focus. Run build.sh for unit tests, lint, release build and APK signature verification."
+          },
+          {
+            "id": "5",
+            "title": "5 \u00b7 Verify device behavior separately",
+            "detail": "Run actual app capability/provider/launch/refresh checks, then native UI and D-pad checks. Record unavailable checks as unfinished, with per-app remaining coverage gaps."
+          }
+        ]
+      }
+    },
+    {
+      "id": "scope",
+      "text": "Public app contracts define the achievable coverage.",
+      "detail": "No root, scraping, private Google APIs, subscription/authentication integrations or new voice search. Native Google TV parity is an aspiration for the interaction, not a promise of its proprietary catalog or personalized feed. Ordinary launcher permissions cannot force apps to expose recommendations or suggestions.",
+      "exhibit": {
+        "type": "schema",
+        "text": "In scope: installed app names; readable published TV content; exported permitted suggestion providers; verified app search actions; owner-safe launch; honest status and source controls.\nOutside scope: private catalogs, account linking, entitlement claims, guaranteed playback availability, new voice input.\nCoverage acceptance: accessible sources return real results; inaccessible sources show truthful fallback; missing requested app coverage is documented as unmet."
+      }
+    }
+  ],
+  "scope": {
+    "included": [
+      "Capability evidence from actual launcher UID",
+      "Published installed-app recommendations",
+      "Federated public app search and safe launches",
+      "Source settings, partial states and D-pad verification"
+    ],
+    "excluded": [
+      "Root and scraping",
+      "Private Google APIs or guaranteed Google TV catalog parity",
+      "Subscription/auth integration",
+      "New voice search"
+    ],
+    "verification": "Local automated behavior, actual app/provider/launch/refresh evidence and native UI remote inspection are separate outcomes. Historical docs and fake providers are not current cross-app access evidence."
+  }
+}

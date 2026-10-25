@@ -14,7 +14,7 @@ const host={markup:'',contains:node=>buttons.includes(node),set innerHTML(value)
 document.getElementById=id=>id==='search'?input:null;
 document.querySelector=selector=>selector==='#search'?input:selector==='#results'?host:buttons.find(button=>selector===`[data-focus-key="${button.dataset.focusKey}"]`)||null;
 const calls=[],timers=new Map();let clock=0,timerId=0;
-const state={modal:'search',searchApps:[{installed:true,package:'org.stremio.tv',name:'Stremio',art:'/art/stremio'},{installed:true,package:'org.netflix.tv',name:'Netflix',art:'/art/netflix'},{installed:false,package:'removed',name:'Stremio old'}],searchItems:[]};
+const state={modal:null,page:'search',searchApps:[{installed:true,package:'org.stremio.tv',name:'Stremio',art:'/art/stremio'},{installed:true,package:'org.netflix.tv',name:'Netflix',art:'/art/netflix'},{installed:false,package:'removed',name:'Stremio old'}],searchItems:[]};
 const context={state,document,CSS:{escape:value=>value},serial:0,searchTimer:null,initialFocused:false,
  $:selector=>document.querySelector(selector),picture:value=>value?`background-image:url('${value}')`:'',
  focus:element=>{document.activeElement=element;},native:(op,data={})=>calls.push({op,...data}),
@@ -37,7 +37,7 @@ const movie={key:'movie:tt0133093',title:'The Matrix',mediaType:'movie',year:'19
  assert.notEqual(state.searchRequest,firstRequest);
  respond(firstRequest,[movie]);assert.doesNotMatch(host.innerHTML,/The Matrix/);
  document.activeElement=buttons[0];
- respond(state.searchRequest,[movie,movie]);
+ state.modal='details';respond(state.searchRequest,[movie,movie]);state.modal=null;
  assert.equal(document.activeElement.dataset.focusKey,'search-app-org.stremio.tv');
  assert.ok(host.contains(document.activeElement));
  assert.equal((host.innerHTML.match(/The Matrix<\/h3>/g)||[]).length,1);
@@ -49,7 +49,7 @@ const movie={key:'movie:tt0133093',title:'The Matrix',mediaType:'movie',year:'19
  assert.doesNotMatch(host.innerHTML,/The Matrix/);assert.match(host.innerHTML,/Enter a name/);
  assert.equal(calls.filter(call=>call.op==='search').length,2);
  assert.equal(calls.filter(call=>call.op==='cancelSearch').length,4);
- type('net');state.modal=null;await advance(320);
+ type('net');state.page='home';await advance(320);
  assert.equal(calls.filter(call=>call.op==='search').length,2);
- console.log('Unified search: offline apps/icons, debounce, stale rejection, deduplication, focus preservation/fallback, cancellation and closed-modal guard passed');
+ console.log('Unified search: offline apps/icons, debounce, stale rejection, deduplication, focus preservation/fallback, cancellation and inactive-page guard passed');
 })().catch(error=>{console.error(error);process.exitCode=1;});
