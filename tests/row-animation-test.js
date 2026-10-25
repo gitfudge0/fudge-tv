@@ -22,7 +22,7 @@ frame(280);assert.equal(row.scrollLeft,185);assert.equal(frames.size,0);
 reduced=true;row.scrollLeft=0;context.document.activeElement=cards[2];context.animateRow(row,starts);assert.equal(row.scrollLeft,105);assert.equal(frames.size,0);
 // The Home page no longer renders a queue, and media cards use the poster URL.
 const html=fs.readFileSync(require('node:path').join(__dirname,'../app/src/main/assets/ui/index.html'),'utf8');
-assert.doesNotMatch(html,/class="queue"|id="queue"/);assert.equal((html.match(/id="homeApps"/g)||[]).length,1);
+assert.doesNotMatch(html,/class="queue"/);assert.ok(html.indexOf('id="queue"')<html.indexOf('id="homeApps"'));assert.equal((html.match(/id="homeApps"/g)||[]).length,1);
 const markupContext={esc:v=>v,picture:v=>v};vm.createContext(markupContext);vm.runInContext(production('card'),markupContext);
 const markup=markupContext.card({key:'movie:1',title:'Movie',poster:'portrait.jpg',art:'landscape.jpg'});
 assert.match(markup,/card poster-card/);assert.match(markup,/portrait.jpg/);assert.doesNotMatch(markup,/landscape.jpg/);

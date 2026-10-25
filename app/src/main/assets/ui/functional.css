@@ -148,9 +148,9 @@ button{transition-duration:125ms}.backdrop{transition:opacity 375ms,transform 4s
 
 /* Give featured artwork the first screen, with its details near the lower third. */
 .hero{height:max(980px,105vh)}
-.hero-copy{top:55vh;width:76%;max-width:1100px;transform:none}
+.hero-copy{top:45vh;width:76%;max-width:1100px;transform:none}
 .hero-bottom{bottom:35px}
-@media(max-width:720px){.hero{height:max(920px,115vh)}.hero-copy{width:88%;top:55vh;transform:none}}
+@media(max-width:720px){.hero{height:max(920px,115vh)}.hero-copy{width:88%;top:45vh;transform:none}}
 /* Media uses portrait posters; installed apps keep their native app artwork. */
 .rail button.card.poster-card,.provider-row button.card.poster-card{flex-basis:200px;width:200px}
 .rail button.card.poster-card .card-art,.provider-row button.card.poster-card .card-art{height:300px;aspect-ratio:2/3}
@@ -159,3 +159,15 @@ button{transition-duration:125ms}.backdrop{transition:opacity 375ms,transform 4s
 .provider-row{min-height:465px;align-items:flex-end}.rail{min-height:465px}
 .search-page .poster-card .card-art{aspect-ratio:2/3}
 .home-row,.rail{overflow-anchor:none}
+
+/* Slide controls follow the featured actions in the same content flow. */
+.hero-copy .hero-bottom{position:static;display:flex;align-items:center;gap:24px;margin-top:28px;padding:0;inset:auto;width:auto}
+.hero-copy .hero-bottom .dots{margin:0}.hero-copy .slide-count{margin:0}
+/* Real shared history is a regular horizontal row, ahead of installed apps. */
+.watch-row{min-height:325px;align-items:flex-end}
+.watch-row button.card{flex-basis:300px;width:300px}
+.watch-row button.card .card-art{height:169px;position:relative;aspect-ratio:16/9}
+.watch-row button.card.tv-focused{flex-basis:380px;width:380px}
+.watch-row button.card.tv-focused .card-art{height:214px}
+.watch-progress{position:absolute;left:12px;right:12px;bottom:12px;height:5px;background:#ffffff55;border-radius:4px;overflow:hidden}
+.watch-progress i{display:block;height:100%;background:#fff}
