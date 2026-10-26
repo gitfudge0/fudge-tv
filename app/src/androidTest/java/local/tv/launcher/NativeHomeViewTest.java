@@ -225,6 +225,71 @@ public class NativeHomeViewTest {
   }
 
   @Test
+  public void searchExcludesStremioProgramsAcrossSourcesButKeepsItsAppAndCatalog() {
+    main(
+        () -> {
+          Library.Snapshot snapshot = new Library.Snapshot();
+          snapshot.allApps.add(
+              new Library.App("com.stremio.one", "Stremio", new Intent("fixture")));
+          Library.Channel channel = new Library.Channel();
+          snapshot.channels.add(channel);
+          java.util.List<Library.Program> provider = new java.util.ArrayList<>();
+          for (int i = 0; i < 3; i++) {
+            Library.Program excluded = new Library.Program();
+            excluded.id = "stremio:" + i;
+            excluded.owner = "com.stremio.one";
+            excluded.title = "Stremio match";
+            if (i == 0) snapshot.programs.add(excluded);
+            else if (i == 1) channel.programs.add(excluded);
+            else provider.add(excluded);
+          }
+          Library.Program included = new Library.Program();
+          included.id = "other:match";
+          included.owner = "fixture.app";
+          included.title = "Stremio documentary";
+          provider.add(included);
+          activity.home.renderSnapshot(snapshot);
+          activity.home.showSearch();
+          ((EditText) activity.home.findViewById(R.id.search_input)).setText("Stremio");
+          activity.home.renderAppSearch(provider, true);
+          try {
+            activity.home.renderSearch(
+                new org.json.JSONObject()
+                    .put(
+                        "items",
+                        new org.json.JSONArray()
+                            .put(
+                                new org.json.JSONObject()
+                                    .put("key", "movie:tt1234567")
+                                    .put("title", "Catalog title"))));
+          } catch (org.json.JSONException impossible) {
+            throw new AssertionError(impossible);
+          }
+        });
+    waitMs(150);
+    main(
+        () -> {
+          NativeRowAdapter adapter =
+              (NativeRowAdapter)
+                  ((RecyclerView) activity.home.findViewById(R.id.search_rows)).getAdapter();
+          assertEquals(3, adapter.getItemCount());
+          assertEquals("Apps", adapter.getCurrentList().get(0).title);
+          assertEquals("com.stremio.one", adapter.getCurrentList().get(0).cards.get(0).app.id);
+          NativeRowAdapter.Row shared = adapter.getCurrentList().get(1);
+          assertEquals("From your apps", shared.title);
+          assertEquals(1, shared.cards.size());
+          assertEquals("other:match", shared.cards.get(0).id);
+          assertEquals("Movies and series", adapter.getCurrentList().get(2).title);
+          EditText input = activity.home.findViewById(R.id.search_input);
+          ViewGroup page = (ViewGroup) input.getParent();
+          int headerLeft = activity.home.findViewById(R.id.home_header).getLeft();
+          assertEquals(headerLeft, input.getLeft());
+          assertEquals(headerLeft, page.getChildAt(0).getPaddingLeft());
+          assertEquals(headerLeft, activity.home.findViewById(R.id.search_status).getPaddingLeft());
+        });
+  }
+
+  @Test
   public void searchOmitsHandoffsAndShowsRealProviderResultsAsLandscapeCards() {
     Library.Program handoff = new Library.Program();
     handoff.id = "appsearch:handoff:fixture";

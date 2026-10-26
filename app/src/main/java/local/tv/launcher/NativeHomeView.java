@@ -145,7 +145,7 @@ final class NativeHomeView extends FrameLayout {
     searchPage.setPadding(0, ui.px(165), 0, 0);
     searchPage.setVisibility(GONE);
     TextView searchHeading = ui.text("Search", 48, Color.WHITE);
-    searchHeading.setPadding(ui.px(115), 0, 0, ui.px(18));
+    searchHeading.setPadding(ui.px(80), 0, 0, ui.px(18));
     searchPage.addView(searchHeading);
     searchInput = new EditText(context);
     searchInput.setId(R.id.search_input);
@@ -160,12 +160,12 @@ final class NativeHomeView extends FrameLayout {
     searchInput.setOnFocusChangeListener((v, focused) -> ui.inputFocus(searchInput, focused));
     searchInput.setPadding(ui.px(20), ui.px(17), ui.px(20), ui.px(17));
     LinearLayout.LayoutParams inputLayout = new LinearLayout.LayoutParams(ui.px(1100), ui.px(78));
-    inputLayout.leftMargin = ui.px(115);
+    inputLayout.leftMargin = ui.px(80);
     searchPage.addView(searchInput, inputLayout);
     searchStatus = ui.text("Enter a name to search your apps and Cinemeta.", 22, NativeUi.MUTED);
     searchStatus.setId(R.id.search_status);
     searchStatus.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
-    searchStatus.setPadding(ui.px(115), ui.px(20), 0, ui.px(20));
+    searchStatus.setPadding(ui.px(80), ui.px(20), 0, ui.px(20));
     searchPage.addView(searchStatus);
     searchRows = verticalList();
     searchRows.setId(R.id.search_rows);
@@ -484,6 +484,10 @@ final class NativeHomeView extends FrameLayout {
     if (active && searchVisible && searchPending) main.postDelayed(submitSearch, 320);
   }
 
+  private static boolean includeAppSearchProgram(Library.Program program) {
+    return !program.searchHandoff && !"com.stremio.one".equals(program.owner);
+  }
+
   private void renderSearchRows() {
     List<NativeRowAdapter.Row> rows = new ArrayList<>();
     List<NativeCard> apps = new ArrayList<>();
@@ -502,11 +506,11 @@ final class NativeHomeView extends FrameLayout {
       List<Library.Program> candidates = new ArrayList<>(snapshot.programs);
       for (Library.Channel channel : snapshot.channels) candidates.addAll(channel.programs);
       for (Library.Program program : candidates)
-        if (!program.searchHandoff
+        if (includeAppSearchProgram(program)
             && program.title.toLowerCase(Locale.ROOT).contains(query.toLowerCase(Locale.ROOT))
             && seen.add(program.id)) shared.add(NativeCard.recommendation(program));
       for (Library.Program program : appSearchItems)
-        if (!program.searchHandoff && seen.add(program.id))
+        if (includeAppSearchProgram(program) && seen.add(program.id))
           shared.add(NativeCard.recommendation(program));
     }
     if (!shared.isEmpty())
