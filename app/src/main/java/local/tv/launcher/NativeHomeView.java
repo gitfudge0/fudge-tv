@@ -68,7 +68,6 @@ final class NativeHomeView extends FrameLayout {
   private final NativeImages images;
   private final Listener listener;
   private final Handler main = new Handler(Looper.getMainLooper());
-  private final ImageView backdrop;
   private final RecyclerView homeRows, searchRows;
   private final NativeRowAdapter homeAdapter, searchAdapter;
   private final LinearLayout nav, searchPage;
@@ -106,35 +105,10 @@ final class NativeHomeView extends FrameLayout {
     setBackgroundColor(NativeUi.BACKGROUND);
     setClipChildren(true);
     setClipToPadding(false);
-    backdrop =
-        new ImageView(context) {
-          @Override
-          protected void onSizeChanged(int width, int height, int oldWidth, int oldHeight) {
-            super.onSizeChanged(width, height, oldWidth, oldHeight);
-            if (getDrawable() == null) return;
-            float scale = width / (float) getDrawable().getIntrinsicWidth();
-            android.graphics.Matrix frame = new android.graphics.Matrix();
-            frame.setScale(scale, scale);
-            // Keep the mountain range in the visible scenic band; discard excess sky.
-            frame.postTranslate(
-                0, height * .24f - getDrawable().getIntrinsicHeight() * scale * .46f);
-            setImageMatrix(frame);
-          }
-        };
-    backdrop.setId(R.id.home_wallpaper);
-    backdrop.setScaleType(ImageView.ScaleType.MATRIX);
-    backdrop.setImageResource(R.drawable.home_wallpaper);
-    addView(backdrop, new FrameLayout.LayoutParams(-1, -1));
-    View fade = new View(context);
-    GradientDrawable gradient =
-        new GradientDrawable(
-            GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[] {0x30090b0d, 0x18090b0d, 0x88090b0d, 0xf5090b0d, NativeUi.BACKGROUND});
-    gradient.setColors(
-        new int[] {0x30090b0d, 0x18090b0d, 0x88090b0d, 0xf5090b0d, NativeUi.BACKGROUND},
-        new float[] {0, .16f, .32f, .53f, .72f});
-    fade.setBackground(gradient);
-    addView(fade, new FrameLayout.LayoutParams(-1, -1));
+    View background = new View(context);
+    background.setId(R.id.home_wallpaper);
+    background.setBackgroundResource(R.drawable.home_background);
+    addView(background, new FrameLayout.LayoutParams(-1, -1));
 
     homeRows = verticalList();
     homeRows.setId(R.id.home_rows);
@@ -149,7 +123,7 @@ final class NativeHomeView extends FrameLayout {
     homeAdapter.setInitialTopInset(
         Math.round(context.getResources().getDisplayMetrics().heightPixels * .15f));
     homeRows.setAdapter(homeAdapter);
-    // Clip scrolling content below the fixed glass header, with a scenic initial top inset.
+    // Clip scrolling content below the fixed glass header, with the existing initial top inset.
     homeRows.setClipChildren(true);
     homeRows.setClipToPadding(true);
     FrameLayout.LayoutParams homeLayout = new FrameLayout.LayoutParams(-1, -1);
@@ -564,7 +538,6 @@ final class NativeHomeView extends FrameLayout {
     closeDialog(false);
     homeRows.setAdapter(null);
     searchRows.setAdapter(null);
-    backdrop.setImageDrawable(null);
   }
 
   private void hideKeyboard() {

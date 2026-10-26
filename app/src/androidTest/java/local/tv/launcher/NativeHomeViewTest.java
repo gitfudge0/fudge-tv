@@ -360,17 +360,23 @@ public class NativeHomeViewTest {
   }
 
   @Test
-  public void fixedWallpaperFramesMountainsAboveInitialContentAndHeaderIsCompact() {
+  public void fixedGradientUsesReferenceColorsAndHeaderIsCompact() {
     main(
         () -> {
-          android.widget.ImageView wallpaper = activity.home.findViewById(R.id.home_wallpaper);
-          assertEquals(android.widget.ImageView.ScaleType.MATRIX, wallpaper.getScaleType());
-          float[] point = {
-            wallpaper.getDrawable().getIntrinsicWidth() / 2f,
-            wallpaper.getDrawable().getIntrinsicHeight() * .46f
-          };
-          wallpaper.getImageMatrix().mapPoints(point);
-          assertEquals(wallpaper.getHeight() * .24f, point[1], 2f);
+          View background = activity.home.findViewById(R.id.home_wallpaper);
+          assertFalse(background instanceof android.widget.ImageView);
+          android.graphics.Bitmap pixels =
+              android.graphics.Bitmap.createBitmap(
+                  100, 100, android.graphics.Bitmap.Config.ARGB_8888);
+          android.graphics.drawable.Drawable gradient = background.getBackground();
+          android.graphics.Rect bounds = new android.graphics.Rect(gradient.getBounds());
+          gradient.setBounds(0, 0, 100, 100);
+          gradient.draw(new android.graphics.Canvas(pixels));
+          gradient.setBounds(bounds);
+          assertColorNear(0xff20263e, pixels.getPixel(0, 0));
+          assertColorNear(0xff30243f, pixels.getPixel(99, 0));
+          assertColorNear(0xff0b1120, pixels.getPixel(50, 99));
+          pixels.recycle();
           RecyclerView rows = activity.home.findViewById(R.id.home_rows);
           NativeRowAdapter.Holder first =
               (NativeRowAdapter.Holder) rows.findViewHolderForAdapterPosition(0);
@@ -1001,13 +1007,9 @@ public class NativeHomeViewTest {
   }
 
   @Test
-  public void inputsFallbackActionsAreReachableAndWallpaperStaysFixedWhileRowsScroll() {
-    android.graphics.Matrix before = new android.graphics.Matrix();
-    main(
-        () ->
-            before.set(
-                ((android.widget.ImageView) activity.home.findViewById(R.id.home_wallpaper))
-                    .getImageMatrix()));
+  public void inputsFallbackActionsAreReachableAndGradientStaysFixedWhileRowsScroll() {
+    android.graphics.Rect before = new android.graphics.Rect();
+    main(() -> activity.home.findViewById(R.id.home_wallpaper).getGlobalVisibleRect(before));
     NativeUiTestDriver.reachProviderRow(instrumentation, activity);
     instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
     NativeUiTestDriver.awaitFocus(instrumentation, activity, "movie:tt1000000");
@@ -1023,10 +1025,9 @@ public class NativeHomeViewTest {
           java.util.List<NativeCard> inputs = home.getCurrentList().get(4).cards;
           assertEquals("No devices leaves only the system input-menu fallback", 1, inputs.size());
           assertEquals("control:input-menu", inputs.get(0).id);
-          assertEquals(
-              before,
-              ((android.widget.ImageView) activity.home.findViewById(R.id.home_wallpaper))
-                  .getImageMatrix());
+          android.graphics.Rect after = new android.graphics.Rect();
+          activity.home.findViewById(R.id.home_wallpaper).getGlobalVisibleRect(after);
+          assertEquals(before, after);
           int[] header = new int[2];
           activity.home.findViewById(R.id.home_header).getLocationOnScreen(header);
           assertEquals(new NativeUi(activity).px(26), header[1]);
@@ -1042,6 +1043,13 @@ public class NativeHomeViewTest {
                 "Header Settings remains available",
                 "Settings",
                 activity.home.findViewById(R.id.nav_settings).getContentDescription()));
+  }
+
+  private static void assertColorNear(int expected, int actual) {
+    assertEquals(android.graphics.Color.red(expected), android.graphics.Color.red(actual), 2);
+    assertEquals(android.graphics.Color.green(expected), android.graphics.Color.green(actual), 2);
+    assertEquals(android.graphics.Color.blue(expected), android.graphics.Color.blue(actual), 2);
+    assertEquals(255, android.graphics.Color.alpha(actual));
   }
 
   private static void assertContinuousScroll(java.util.List<Integer> deltas) {
