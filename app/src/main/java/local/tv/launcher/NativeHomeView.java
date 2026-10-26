@@ -458,13 +458,16 @@ final class NativeHomeView extends FrameLayout {
   }
 
   private void activateCard(NativeCard card) {
+    if (!card.enabled) return;
     hideKeyboard();
     if (card.kind == NativeCard.Kind.INPUT) {
       if (card.id.equals("control:input-menu")) listener.onInput(null);
       else if (card.id.equals("control:system-settings")) listener.onSystemSettings();
       else if (card.id.equals("control:system-home")) listener.onSystemHome();
       else listener.onInput(card.id.substring("input:".length()));
-    } else if (card.app != null) listener.onLaunchApp(card.app.id);
+    } else if (card.app != null && card.id.startsWith("appsearch:handoff:"))
+      listener.onResumeProgram(card.id);
+    else if (card.app != null) listener.onLaunchApp(card.app.id);
     else if (card.item != null) openDetails(card.item);
     else listener.onResumeProgram(card.id);
   }
@@ -500,6 +503,26 @@ final class NativeHomeView extends FrameLayout {
       rows.add(
           new NativeRowAdapter.Row(
               "search-apps", "Apps", "Installed TV apps", NativeCard.Kind.APP, apps));
+    List<NativeCard> searchApps = new ArrayList<>();
+    if (!query.isEmpty())
+      for (Library.App app : snapshot.apps) {
+        if (app.launch == null) continue;
+        NativeCard searchApp = NativeCard.unavailableSearchApp(app);
+        for (Library.Program handoff : appSearchItems)
+          if (handoff.searchHandoff && app.id.equals(handoff.owner) && handoff.launch != null) {
+            searchApp = NativeCard.searchApp(app, handoff);
+            break;
+          }
+        searchApps.add(searchApp);
+      }
+    if (!searchApps.isEmpty())
+      rows.add(
+          new NativeRowAdapter.Row(
+              "search-handoffs",
+              "Search in your apps",
+              "Open an app to search for “" + query + "”",
+              NativeCard.Kind.APP,
+              searchApps));
     List<NativeCard> shared = new ArrayList<>();
     Set<String> seen = new HashSet<>();
     if (!query.isEmpty()) {

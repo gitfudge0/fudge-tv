@@ -95,6 +95,7 @@ final class AppSearch implements AutoCloseable {
           }
           int count = 0;
           for (Library.App app : apps) {
+            if (app.launch == null) continue;
             if (request.canceled || count++ >= 32) break;
             try {
               Set<ComponentName> seen = new HashSet<>();
@@ -137,13 +138,18 @@ final class AppSearch implements AutoCloseable {
                 handoff.title = "Search in " + app.label;
                 handoff.description = query;
                 handoff.searchHandoff = true;
-                handoff.launch =
-                    new Intent(Intent.ACTION_SEARCH)
-                        .setComponent(component)
-                        .putExtra(SearchManager.QUERY, query);
-                synchronized (request) {
-                  if (!request.canceled) request.items.add(handoff);
-                }
+                handoff.launch = handoffIntent(app.id, component, query);
+                ResolveInfo resolved =
+                    pm.resolveActivity(handoff.launch, PackageManager.MATCH_DEFAULT_ONLY);
+                // This installed app declares SEARCH but ignores its query and opens Home.
+                // Keep reading real provider results; never advertise a misleading handoff.
+                if ((declaresSearch || "com.stremio.one".equals(app.id))
+                    && resolved != null
+                    && accessible(context, resolved.activityInfo, app.id)
+                    && !"in.startv.hotstar".equals(app.id))
+                  synchronized (request) {
+                    if (!request.canceled) request.items.add(handoff);
+                  }
                 if (searchable != null && searchable.getSuggestAuthority() != null) {
                   CancellationSignal signal = new CancellationSignal();
                   synchronized (request) {
@@ -168,6 +174,22 @@ final class AppSearch implements AutoCloseable {
                   callback.accept(request.snapshot(), false);
               });
         });
+  }
+
+  static Intent handoffIntent(String owner, ComponentName component, String query) {
+    // Stremio documents its own query-bearing link; ACTION_SEARCH opens only its Home.
+    // https://github.com/Stremio/stremio-addon-sdk/blob/master/docs/deep-links.md
+    if ("com.stremio.one".equals(owner))
+      return new Intent(
+              Intent.ACTION_VIEW,
+              Uri.parse("stremio:///search")
+                  .buildUpon()
+                  .appendQueryParameter("search", query)
+                  .build())
+          .setPackage(owner);
+    return new Intent(Intent.ACTION_SEARCH)
+        .setComponent(component)
+        .putExtra(SearchManager.QUERY, query);
   }
 
   private void read(

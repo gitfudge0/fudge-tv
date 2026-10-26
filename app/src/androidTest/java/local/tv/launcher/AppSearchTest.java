@@ -184,6 +184,65 @@ public class AppSearchTest {
   }
 
   @Test
+  public void stremioUsesDocumentedSearchLinkAndEncodesExactQuery() {
+    String query = "Kaho Na Pyar Hai / ? &";
+    Intent intent =
+        AppSearch.handoffIntent(
+            "com.stremio.one", new ComponentName("com.stremio.one", "ignored"), query);
+    assertEquals(Intent.ACTION_VIEW, intent.getAction());
+    assertEquals("com.stremio.one", intent.getPackage());
+    assertEquals("/search", intent.getData().getPath());
+    assertEquals(query, intent.getData().getQueryParameter("search"));
+    assertNull(intent.getComponent());
+  }
+
+  @Test
+  public void handoffDeliversExactQueryToAppSearchActivity() throws Exception {
+    Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+    AppSearch search = new AppSearch(context);
+    CountDownLatch done = new CountDownLatch(1);
+    java.util.concurrent.atomic.AtomicReference<Library.Program> handoff =
+        new java.util.concurrent.atomic.AtomicReference<>();
+    String query = "Kaho Na Pyar Hai / ?";
+    InstrumentationRegistry.getInstrumentation()
+        .runOnMainSync(
+            () ->
+                search.search(
+                    query,
+                    fixtureApps(context),
+                    (items, finished) -> {
+                      for (Library.Program item : items) if (item.searchHandoff) handoff.set(item);
+                      if (finished) done.countDown();
+                    }));
+    try {
+      assertTrue(done.await(5, TimeUnit.SECONDS));
+      assertNotNull(handoff.get());
+      assertEquals(Intent.ACTION_SEARCH, handoff.get().launch.getAction());
+      assertEquals(query, handoff.get().launch.getStringExtra(SearchManager.QUERY));
+      context.getSharedPreferences("search-fixture", Context.MODE_PRIVATE).edit().clear().commit();
+      context.startActivity(
+          new Intent(handoff.get().launch).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+      long deadline = android.os.SystemClock.uptimeMillis() + 2000;
+      while (android.os.SystemClock.uptimeMillis() < deadline
+          && !context
+              .getSharedPreferences("search-fixture", Context.MODE_PRIVATE)
+              .contains("query")) Thread.sleep(30);
+      assertEquals(
+          query,
+          context
+              .getSharedPreferences("search-fixture", Context.MODE_PRIVATE)
+              .getString("query", ""));
+      assertEquals(
+          Intent.ACTION_SEARCH,
+          context
+              .getSharedPreferences("search-fixture", Context.MODE_PRIVATE)
+              .getString("action", ""));
+    } finally {
+      InstrumentationRegistry.getInstrumentation().runOnMainSync(search::close);
+    }
+  }
+
+  @Test
   public void actualAppUidSearchProbe() throws Exception {
     Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
     AppSearch search = new AppSearch(context);

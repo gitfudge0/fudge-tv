@@ -11,6 +11,8 @@ public class SearchFixtureActivity extends Activity {
     getSharedPreferences("search-fixture", MODE_PRIVATE)
         .edit()
         .putString("data", String.valueOf(getIntent().getData()))
+        .putString("query", getIntent().getStringExtra(android.app.SearchManager.QUERY))
+        .putString("action", getIntent().getAction())
         .commit();
     finish();
   }

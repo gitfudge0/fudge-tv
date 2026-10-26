@@ -195,7 +195,7 @@ public class NativeHomeViewTest {
         () -> {
           RecyclerView rows = activity.home.findViewById(R.id.search_rows);
           NativeRowAdapter adapter = (NativeRowAdapter) rows.getAdapter();
-          assertEquals(1, adapter.getItemCount());
+          assertEquals(2, adapter.getItemCount());
           assertEquals("Stremio", adapter.getCurrentList().get(0).cards.get(0).title);
           try {
             activity.home.renderSearch(
@@ -290,14 +290,21 @@ public class NativeHomeViewTest {
   }
 
   @Test
-  public void searchOmitsHandoffsAndShowsRealProviderResultsAsLandscapeCards() {
+  public void searchHandoffsUseHomeAppCardsAndKeepRealResultsAsLandscapeCards() {
     Library.Program handoff = new Library.Program();
     handoff.id = "appsearch:handoff:fixture";
     handoff.owner = "fixture.app";
     handoff.title = "Search in Fixture";
     handoff.searchHandoff = true;
+    handoff.launch = new Intent(Intent.ACTION_SEARCH);
     main(
         () -> {
+          Library.Snapshot snapshot = new Library.Snapshot();
+          Library.App supported = new Library.App("fixture.app", "Fixture", new Intent("fixture"));
+          snapshot.apps.add(new Library.App("unsupported", "Other", new Intent("fixture")));
+          snapshot.apps.add(supported);
+          snapshot.apps.add(new Library.App("absent", "Absent", null));
+          activity.home.renderSnapshot(snapshot);
           activity.home.showSearch();
           ((EditText) activity.home.findViewById(R.id.search_input)).setText("needle");
           activity.home.renderAppSearch(java.util.Collections.singletonList(handoff), true);
@@ -308,10 +315,16 @@ public class NativeHomeViewTest {
           NativeRowAdapter adapter =
               (NativeRowAdapter)
                   ((RecyclerView) activity.home.findViewById(R.id.search_rows)).getAdapter();
-          assertEquals(
-              "A handoff alone must not create an activatable search section",
-              0,
-              adapter.getItemCount());
+          assertEquals(1, adapter.getItemCount());
+          NativeRowAdapter.Row handoffs = adapter.getCurrentList().get(0);
+          assertEquals("Search in your apps", handoffs.title);
+          assertEquals(NativeCard.Kind.APP, handoffs.kind);
+          assertEquals(2, handoffs.cards.size());
+          assertEquals("unsupported", handoffs.cards.get(0).app.id);
+          assertFalse(handoffs.cards.get(0).enabled);
+          assertEquals("Search unavailable", handoffs.cards.get(0).subtitle);
+          assertEquals("fixture.app", handoffs.cards.get(1).app.id);
+          assertEquals("Fixture", handoffs.cards.get(1).title);
           assertTrue(activity.resumes.isEmpty());
           Library.Program result = new Library.Program();
           result.id = "appsearch:result:fixture";
@@ -324,13 +337,29 @@ public class NativeHomeViewTest {
         () -> {
           RecyclerView rows = activity.home.findViewById(R.id.search_rows);
           NativeRowAdapter adapter = (NativeRowAdapter) rows.getAdapter();
-          assertEquals(1, adapter.getItemCount());
-          NativeRowAdapter.Row row = adapter.getCurrentList().get(0);
+          assertEquals(2, adapter.getItemCount());
+          ViewGroup appSection = (ViewGroup) rows.findViewHolderForAdapterPosition(0).itemView;
+          RecyclerView appCards = (RecyclerView) appSection.getChildAt(2);
+          NativeCardAdapter.Holder appCard =
+              (NativeCardAdapter.Holder) appCards.findViewHolderForAdapterPosition(1);
+          NativeCardAdapter.Holder unavailable =
+              (NativeCardAdapter.Holder) appCards.findViewHolderForAdapterPosition(0);
+          assertFalse(unavailable.itemView.isEnabled());
+          assertFalse(unavailable.itemView.isFocusable());
+          unavailable.itemView.performClick();
+          assertTrue(activity.resumes.isEmpty());
+          assertTrue(activity.launches.isEmpty());
+          assertEquals("Fixture", appCard.title.getText().toString());
+          appCard.itemView.performClick();
+          assertEquals(java.util.Collections.singletonList(handoff.id), activity.resumes);
+          assertTrue("Search cards must not launch the app home", activity.launches.isEmpty());
+          activity.resumes.clear();
+          NativeRowAdapter.Row row = adapter.getCurrentList().get(1);
           assertEquals("From your apps", row.title);
           assertEquals(NativeCard.Kind.RECOMMENDATION, row.kind);
           assertEquals(1, row.cards.size());
           assertEquals("appsearch:result:fixture", row.cards.get(0).id);
-          ViewGroup section = (ViewGroup) rows.findViewHolderForAdapterPosition(0).itemView;
+          ViewGroup section = (ViewGroup) rows.findViewHolderForAdapterPosition(1).itemView;
           RecyclerView cards = (RecyclerView) section.getChildAt(2);
           NativeCardAdapter.Holder card =
               (NativeCardAdapter.Holder) cards.findViewHolderForAdapterPosition(0);
@@ -341,6 +370,44 @@ public class NativeHomeViewTest {
               java.util.Collections.singletonList("appsearch:result:fixture"), activity.resumes);
           assertNull(activity.openedTitle);
         });
+    main(() -> activity.home.findViewById(R.id.search_input).requestFocus());
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, handoff.id);
+    main(
+        () -> {
+          activity.home.renderAppSearch(java.util.Collections.emptyList(), true);
+          activity.home.findViewById(R.id.search_input).requestFocus();
+        });
+    waitMs(150);
+    // Both installed apps are unavailable now; navigation must skip this entire row.
+    main(
+        () -> {
+          try {
+            activity.home.renderSearch(
+                new org.json.JSONObject()
+                    .put(
+                        "items",
+                        new org.json.JSONArray()
+                            .put(
+                                new org.json.JSONObject()
+                                    .put("key", "movie:tt1234567")
+                                    .put("title", "Catalog title"))));
+          } catch (org.json.JSONException e) {
+            throw new AssertionError(e);
+          }
+        });
+    waitMs(150);
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "movie:tt1234567");
+    main(() -> ((EditText) activity.home.findViewById(R.id.search_input)).setText(""));
+    waitMs(150);
+    main(
+        () ->
+            assertEquals(
+                0,
+                ((RecyclerView) activity.home.findViewById(R.id.search_rows))
+                    .getAdapter()
+                    .getItemCount()));
   }
 
   @Test

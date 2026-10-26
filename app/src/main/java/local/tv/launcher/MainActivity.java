@@ -567,6 +567,10 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
       return;
     } catch (ActivityNotFoundException | SecurityException ignored) {
     }
+    if (program.searchHandoff) {
+      toast("Unable to search this app. Open the app directly.");
+      return;
+    }
     launch(getPackageManager().getLeanbackLaunchIntentForPackage(program.owner), program.owner);
     scheduleRecommendationRefresh();
   }

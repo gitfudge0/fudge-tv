@@ -61,6 +61,26 @@ final class NativeCard {
         -1);
   }
 
+  /** Home app artwork and geometry, with activation mapped to the query-bearing handoff. */
+  static NativeCard searchApp(Library.App app, Library.Program handoff) {
+    return new NativeCard(
+        handoff.id, app.label, "", "", handoff.description, Kind.APP, app, null, true, -1);
+  }
+
+  static NativeCard unavailableSearchApp(Library.App app) {
+    return new NativeCard(
+        "appsearch:unavailable:" + app.id,
+        app.label,
+        "Search unavailable",
+        "",
+        "",
+        Kind.APP,
+        app,
+        null,
+        false,
+        -1);
+  }
+
   static NativeCard program(Library.Program p, boolean watch) {
     List<String> subtitle = new ArrayList<>();
     if (watch && p.season != null && !p.season.isEmpty()) subtitle.add("Season " + p.season);
