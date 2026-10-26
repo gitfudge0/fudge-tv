@@ -58,6 +58,66 @@ public class NativeMotionTest {
     }
   }
 
+  @Test
+  public void appRailClosesExpansionGapWhenRemoteMovesDown() {
+    Instrumentation instrumentation = InstrumentationRegistry.getInstrumentation();
+    NativeUiTestActivity activity =
+        (NativeUiTestActivity)
+            instrumentation.startActivitySync(
+                new Intent(instrumentation.getTargetContext(), NativeUiTestActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+    try {
+      NativeUiTestDriver.awaitFocus(instrumentation, activity, "watch:0");
+      instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_DPAD_DOWN);
+      NativeUiTestDriver.awaitFocus(instrumentation, activity, "app:fixture.app0");
+      final NativeCardAdapter.Holder[] apps = new NativeCardAdapter.Holder[2];
+      instrumentation.runOnMainSync(
+          () -> {
+            View focus = activity.home.findFocus();
+            androidx.recyclerview.widget.RecyclerView row =
+                (androidx.recyclerview.widget.RecyclerView) focus.getParent();
+            for (int i = 0; i < apps.length; i++)
+              apps[i] =
+                  (NativeCardAdapter.Holder)
+                      row.findViewHolderForItemId(Policy.stableId("app:fixture.app" + i));
+            assertNotNull(apps[0]);
+            assertNotNull(apps[1]);
+          });
+      android.os.SystemClock.sleep(350);
+      instrumentation.runOnMainSync(
+          () -> {
+            assertTrue(apps[0].artwork.getScaleX() > 1f);
+            assertTrue(apps[1].itemView.getTranslationX() > 0f);
+          });
+      instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_DPAD_DOWN);
+      NativeUiTestDriver.awaitFocus(instrumentation, activity, "published:0");
+      android.os.SystemClock.sleep(350);
+      instrumentation.runOnMainSync(
+          () -> {
+            assertEquals(1f, apps[0].artwork.getScaleX(), .001f);
+            assertEquals(
+                "Unfocused neighbor must close the expansion gap",
+                0f,
+                apps[1].itemView.getTranslationX(),
+                .001f);
+            assertTrue("Recommendation source stays selected", apps[0].itemView.isSelected());
+          });
+      instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_DPAD_UP);
+      NativeUiTestDriver.awaitFocus(instrumentation, activity, "app:fixture.app0");
+      instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_DPAD_RIGHT);
+      NativeUiTestDriver.awaitFocus(instrumentation, activity, "app:fixture.app1");
+      android.os.SystemClock.sleep(350);
+      instrumentation.runOnMainSync(
+          () -> {
+            assertEquals(1f, apps[0].artwork.getScaleX(), .001f);
+            assertEquals(0f, apps[1].itemView.getTranslationX(), .001f);
+            assertTrue(apps[1].artwork.getScaleX() > 1f);
+          });
+    } finally {
+      instrumentation.runOnMainSync(activity::finish);
+    }
+  }
+
   private static Object field(Object target, String name) {
     try {
       java.lang.reflect.Field field = target.getClass().getDeclaredField(name);

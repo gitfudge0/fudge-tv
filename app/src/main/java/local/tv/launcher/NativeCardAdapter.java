@@ -424,7 +424,9 @@ final class NativeCardAdapter extends ListAdapter<NativeCard, NativeCardAdapter.
             holder.artwork.setForeground(null);
             holder.artwork.setElevation(0);
             NativeUi.move(holder.artwork, 0, 1f, instant);
-            if (!row.hasFocus()) {
+            // The parent can still report focus while Android dispatches this child blur.
+            // Clear the departing identity directly; a subsequent sibling gain sets its own.
+            if (holder.card.id.equals(selectedId)) {
               selectedId = null;
               selectedPosition = -1;
               updateMotion();
