@@ -87,7 +87,7 @@ final class NativeHomeView extends FrameLayout {
   private int dialogGeneration;
   private android.animation.ValueAnimator scrimAnimator;
   private ScrollView dialogScroll;
-  private LinearLayout dialogPanel;
+  private android.view.ViewGroup dialogPanel;
   private boolean dialogSwap, initialRevealDone;
   private int pageMotionGeneration;
   private Button refreshButton;
@@ -633,6 +633,8 @@ final class NativeHomeView extends FrameLayout {
       if (dialogPanel != null) {
         dialogPanel.animate().cancel();
         dialogPanel.setAlpha(1);
+        dialogPanel.setScaleX(1);
+        dialogPanel.setScaleY(1);
         dialogPanel.setTranslationX(0);
         dialogPanel.setTranslationY(0);
         dialog.getWindow().setDimAmount(.7f);
@@ -679,34 +681,120 @@ final class NativeHomeView extends FrameLayout {
     boolean enrichment = "details".equals(dialogKind) && dialog != null;
     detailItem = item;
     if (!"details".equals(dialogKind) || dialog == null) {
-      LinearLayout content = dialogContent("details");
+      dialogContent("details");
+      FrameLayout panel = new FrameLayout(getContext());
+      panel.setBackground(ui.surface(0xff101216, 24));
+      panel.setClipToOutline(true);
       detailArt = new ImageView(getContext());
       detailArt.setScaleType(ImageView.ScaleType.CENTER_CROP);
-      content.addView(detailArt, new LinearLayout.LayoutParams(-1, ui.px(330)));
-      detailType = ui.text("", 17, 0xffe4d7bf);
-      detailType.setPadding(0, ui.px(20), 0, 0);
-      content.addView(detailType);
-      detailTitle = ui.text("", 48, Color.WHITE);
-      detailTitle.setPadding(0, ui.px(20), 0, ui.px(15));
-      content.addView(detailTitle);
-      detailMeta = ui.text("", 22, NativeUi.MUTED);
-      content.addView(detailMeta);
-      detailDescription = ui.text("", 24, 0xffb4b5bb);
-      detailDescription.setPadding(0, ui.px(23), 0, ui.px(23));
-      content.addView(detailDescription);
-      detailCast = ui.text("", 22, NativeUi.MUTED);
-      detailCast.setPadding(0, 0, 0, ui.px(15));
-      content.addView(detailCast);
+      panel.addView(detailArt, new FrameLayout.LayoutParams(-1, -1));
+      View lateral = new View(getContext());
+      lateral.setBackground(
+          new GradientDrawable(
+              GradientDrawable.Orientation.LEFT_RIGHT,
+              new int[] {0x65101216, 0x24101216, 0x00101216}));
+      panel.addView(lateral, new FrameLayout.LayoutParams(-1, -1));
+      View fade = new View(getContext());
+      fade.setBackground(
+          new GradientDrawable(
+              GradientDrawable.Orientation.BOTTOM_TOP,
+              new int[] {0xff101216, 0xf7101216, 0xcf101216, 0x65101216, 0x08101216, 0x00101216}));
+      panel.addView(fade, new FrameLayout.LayoutParams(-1, -1));
+
+      // The preview is a fixed surface. Budget text within its window rather
+      // than allowing artwork intrinsic size or long copy to expand a ScrollView.
+      LinearLayout copy =
+          new LinearLayout(getContext()) {
+            @Override
+            protected void onMeasure(int widthSpec, int heightSpec) {
+              int budget = Math.max(ui.px(300), previewHeight() - ui.px(170));
+              int unbounded = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
+              float fontScale = getResources().getConfiguration().fontScale;
+              detailTitle.setMaxLines(2);
+              detailDescription.setMaxLines(4);
+              detailMeta.setMaxLines(2);
+              detailCast.setMaxLines(2);
+              int titleSize = 88;
+              detailTitle.setTextSize(
+                  android.util.TypedValue.COMPLEX_UNIT_PX, titleSize * ui.scale * fontScale);
+              super.onMeasure(widthSpec, unbounded);
+              while (getMeasuredHeight() > budget && titleSize > 54) {
+                titleSize -= 2;
+                detailTitle.setTextSize(
+                    android.util.TypedValue.COMPLEX_UNIT_PX, titleSize * ui.scale * fontScale);
+                super.onMeasure(widthSpec, unbounded);
+              }
+              while (getMeasuredHeight() > budget && detailDescription.getMaxLines() > 2) {
+                detailDescription.setMaxLines(detailDescription.getMaxLines() - 1);
+                super.onMeasure(widthSpec, unbounded);
+              }
+              if (getMeasuredHeight() > budget) {
+                detailCast.setMaxLines(1);
+                detailMeta.setMaxLines(1);
+                detailTitle.setMaxLines(1);
+                super.onMeasure(widthSpec, unbounded);
+              }
+            }
+          };
+      copy.setOrientation(LinearLayout.VERTICAL);
+      detailType = ui.text("", 20, 0xffe4d7bf);
+      detailType.setLetterSpacing(.1f);
+      copy.addView(detailType);
+      detailTitle = ui.text("", 88, Color.WHITE);
+      detailTitle.setTypeface(ui.font, android.graphics.Typeface.BOLD);
+      detailTitle.setLetterSpacing(-.035f);
+      detailTitle.setPadding(0, ui.px(16), 0, ui.px(20));
+      copy.addView(detailTitle);
+      detailMeta = ui.text("", 24, 0xffc6c8cd);
+      copy.addView(detailMeta);
+      detailDescription = ui.text("", 29, 0xffd0d1d6);
+      detailDescription.setLineSpacing(0, 1.25f);
+      detailDescription.setPadding(0, ui.px(28), 0, ui.px(20));
+      copy.addView(detailDescription);
+      detailCast = ui.text("", 21, NativeUi.MUTED);
+      detailCast.setLineSpacing(0, 1.18f);
+      copy.addView(detailCast);
+      for (TextView text :
+          new TextView[] {detailTitle, detailMeta, detailDescription, detailCast}) {
+        text.setEllipsize(android.text.TextUtils.TruncateAt.END);
+      }
+      FrameLayout.LayoutParams copyLayout =
+          new FrameLayout.LayoutParams(ui.px(960), -2, Gravity.BOTTOM | Gravity.START);
+      copyLayout.leftMargin = ui.px(76);
+      copyLayout.bottomMargin = ui.px(64);
+      panel.addView(copy, copyLayout);
+
+      LinearLayout handoff = new LinearLayout(getContext());
+      handoff.setOrientation(LinearLayout.VERTICAL);
+      Button open = ui.button("Open in Stremio", () -> listener.onOpenTitle(detailItem));
+      open.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, ui.px(25));
+      handoff.addView(open, new LinearLayout.LayoutParams(-1, ui.px(82)));
       TextView note =
           ui.text(
               "Open this title in Stremio to see details and available streams.",
-              18,
+              19,
               NativeUi.MUTED);
-      content.addView(note);
-      Button open = ui.button("Open in Stremio", () -> listener.onOpenTitle(detailItem));
-      LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
-      lp.topMargin = ui.px(25);
-      content.addView(open, lp);
+      note.setPadding(0, ui.px(20), 0, 0);
+      note.setLineSpacing(0, 1.2f);
+      note.setMaxLines(3);
+      note.setEllipsize(android.text.TextUtils.TruncateAt.END);
+      handoff.addView(note);
+      FrameLayout.LayoutParams actionLayout =
+          new FrameLayout.LayoutParams(ui.px(420), -2, Gravity.BOTTOM | Gravity.END);
+      actionLayout.rightMargin = ui.px(76);
+      actionLayout.bottomMargin = ui.px(80);
+      panel.addView(handoff, actionLayout);
+      Button close = ui.button("✕", () -> closeDialog(true));
+      close.setContentDescription("Close preview");
+      close.setPadding(0, 0, 0, 0);
+      FrameLayout.LayoutParams closeLayout =
+          new FrameLayout.LayoutParams(ui.px(56), ui.px(56), Gravity.TOP | Gravity.END);
+      closeLayout.topMargin = ui.px(28);
+      closeLayout.rightMargin = ui.px(28);
+      panel.addView(close, closeLayout);
+      dialogScroll = null;
+      dialog.setContentView(panel, new android.view.ViewGroup.LayoutParams(-1, -1));
+      dialogPanel = panel;
       showDialog(open);
     }
     detailType.setText(
@@ -748,7 +836,8 @@ final class NativeHomeView extends FrameLayout {
         cast.isEmpty()
             ? ""
             : getContext().getString(R.string.starring_names, String.join(", ", cast)));
-    images.load(detailArt, NativeCard.firstArt(item, "art", "poster"), ui.px(780), ui.px(330));
+    images.load(
+        detailArt, NativeCard.firstArt(item, "art", "poster"), ui.px(1650), previewHeight());
     dialog.setTitle(item.optString("title"));
     if (enrichment) {
       NativeUi.reveal(detailMeta, ui.px(4));
@@ -899,6 +988,10 @@ final class NativeHomeView extends FrameLayout {
     return content;
   }
 
+  private int previewHeight() {
+    return Math.min(ui.px(860), Math.round(getResources().getDisplayMetrics().heightPixels * .9f));
+  }
+
   private void showDialog(View first) {
     dialog.show();
     Window window = dialog.getWindow();
@@ -908,11 +1001,28 @@ final class NativeHomeView extends FrameLayout {
       window.setWindowAnimations(0);
       window.setDimAmount(.7f);
       window.setLayout(
-          ui.px(850), Math.round(getResources().getDisplayMetrics().heightPixels * .9f));
+          "details".equals(dialogKind) ? ui.px(1650) : ui.px(850),
+          "details".equals(dialogKind)
+              ? previewHeight()
+              : Math.round(getResources().getDisplayMetrics().heightPixels * .9f));
     }
     first.requestFocus();
     if (!dialogSwap) animateScrim(dialog, 0, .7f, 200);
-    if (dialogSwap && !NativeUi.reducedMotion()) {
+    if ("details".equals(dialogKind) && !NativeUi.reducedMotion()) {
+      dialogPanel.setAlpha(0);
+      dialogPanel.setScaleX(.97f);
+      dialogPanel.setScaleY(.97f);
+      dialogPanel.setTranslationY(ui.px(24));
+      dialogPanel
+          .animate()
+          .alpha(1)
+          .scaleX(1)
+          .scaleY(1)
+          .translationY(0)
+          .setInterpolator(new android.view.animation.DecelerateInterpolator())
+          .setDuration(240)
+          .start();
+    } else if (dialogSwap && !NativeUi.reducedMotion()) {
       dialogPanel.setTranslationX(ui.px("apps".equals(dialogKind) ? 22 : -22));
       dialogPanel.setAlpha(0);
       dialogPanel.animate().alpha(1).translationX(0).setDuration(200).start();
@@ -944,7 +1054,8 @@ final class NativeHomeView extends FrameLayout {
       if (scrimAnimator != null) scrimAnimator.cancel();
     }
     if (dialog == null) return;
-    if ("details".equals(dialogKind)) {
+    boolean details = "details".equals(dialogKind);
+    if (details) {
       listener.onCancelDetails();
       if (detailArt != null) images.clear(detailArt);
     }
@@ -988,7 +1099,9 @@ final class NativeHomeView extends FrameLayout {
       panel
           .animate()
           .alpha(0)
-          .translationY(ui.px(14))
+          .scaleX(details ? .97f : 1)
+          .scaleY(details ? .97f : 1)
+          .translationY(ui.px(details ? 24 : 14))
           .setDuration(180)
           .withEndAction(finishClose)
           .start();
@@ -998,6 +1111,7 @@ final class NativeHomeView extends FrameLayout {
   boolean handleBack() {
     cancelRowFocus();
     hideKeyboard();
+    if (exitingDialog != null) return true;
     if (dialog != null) {
       closeDialog(true);
       return true;

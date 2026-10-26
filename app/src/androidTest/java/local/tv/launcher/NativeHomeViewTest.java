@@ -318,8 +318,139 @@ public class NativeHomeViewTest {
         () -> {
           activity.home.handleBack();
           assertEquals(1, activity.detailCancellations);
-          assertEquals("movie:tt1000000", NativeUiTestDriver.identity(activity.home.findFocus()));
         });
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "movie:tt1000000");
+  }
+
+  @Test
+  public void cinematicPreviewFillsPanelAndRapidReopenSurvivesOldExit() {
+    org.json.JSONObject item =
+        NativeUiTestActivity.fixtureCatalog().optJSONArray("items").optJSONObject(0);
+    main(() -> activity.home.showDetails(item));
+    waitMs(300);
+    main(
+        () -> {
+          try {
+            java.lang.reflect.Field artField = NativeHomeView.class.getDeclaredField("detailArt");
+            artField.setAccessible(true);
+            android.widget.ImageView art = (android.widget.ImageView) artField.get(activity.home);
+            View panel = (View) art.getParent();
+            float scale = activity.getResources().getDisplayMetrics().widthPixels / 1920f;
+            assertEquals(Math.round(1650 * scale), panel.getWidth());
+            assertEquals(panel.getWidth(), art.getWidth());
+            assertEquals(panel.getHeight(), art.getHeight());
+            assertEquals(0, art.getLeft());
+            assertEquals(0, art.getTop());
+            activity.home.handleBack();
+            activity.home.showDetails(item);
+          } catch (ReflectiveOperationException e) {
+            throw new AssertionError(e);
+          }
+        });
+    waitMs(350);
+    assertEquals("Open in Stremio", activeFocus().getText().toString());
+    main(
+        () -> {
+          assertEquals(1, activity.detailCancellations);
+          activity.home.handleBack();
+        });
+    NativeUiTestDriver.awaitFocus(instrumentation, activity, "watch:0");
+  }
+
+  @Test
+  public void fixedPreviewKeepsTallArtworkAndLongCopyInsideWindow() {
+    org.json.JSONObject item =
+        NativeUiTestActivity.fixtureCatalog().optJSONArray("items").optJSONObject(0);
+    try {
+      item.put(
+          "title",
+          "A Very Long Movie Title That Would Otherwise Wrap Across Many Lines And Push All Other"
+              + " Content Away");
+      item.put(
+          "overview",
+          new String(new char[30])
+              .replace(
+                  "\0",
+                  "A long synopsis remains available in Stremio while this preview stays fixed. "));
+      item.put(
+          "cast", new org.json.JSONArray().put("A long actor name").put("Another long actor name"));
+    } catch (org.json.JSONException e) {
+      throw new AssertionError(e);
+    }
+    main(
+        () -> {
+          activity.home.showDetails(item);
+          android.widget.ImageView art = (android.widget.ImageView) detailField("detailArt");
+          art.setImageDrawable(
+              new android.graphics.drawable.ColorDrawable(android.graphics.Color.BLUE) {
+                @Override
+                public int getIntrinsicWidth() {
+                  return 1650;
+                }
+
+                @Override
+                public int getIntrinsicHeight() {
+                  return 3000;
+                }
+              });
+          art.requestLayout();
+        });
+    waitMs(350);
+    main(
+        () -> {
+          View art = (View) detailField("detailArt");
+          ViewGroup panel = (ViewGroup) art.getParent();
+          float scale = activity.getResources().getDisplayMetrics().widthPixels / 1920f;
+          assertEquals(
+              Math.min(
+                  Math.round(860 * scale),
+                  Math.round(activity.getResources().getDisplayMetrics().heightPixels * .9f)),
+              panel.getHeight());
+          assertEquals(panel.getHeight(), art.getHeight());
+          for (android.view.ViewParent parent = art.getParent();
+              parent instanceof View;
+              parent = parent.getParent()) {
+            assertFalse(
+                "The preview must have no scrollable ancestor",
+                parent instanceof android.widget.ScrollView);
+          }
+          assertEquals(0, count(panel, android.widget.ScrollView.class));
+          for (String field :
+              new String[] {"detailTitle", "detailMeta", "detailDescription", "detailCast"}) {
+            View text = (View) detailField(field);
+            android.graphics.Rect bounds =
+                new android.graphics.Rect(0, 0, text.getWidth(), text.getHeight());
+            panel.offsetDescendantRectToMyCoords(text, bounds);
+            assertTrue(field + " must start within the fixed panel", bounds.top >= 0);
+            assertTrue(
+                field + " must end within the fixed panel", bounds.bottom <= panel.getHeight());
+          }
+          View action = panel.findFocus();
+          assertNotNull(action);
+          android.graphics.Rect bounds =
+              new android.graphics.Rect(0, 0, action.getWidth(), action.getHeight());
+          panel.offsetDescendantRectToMyCoords(action, bounds);
+          assertTrue(bounds.top >= 0);
+          assertTrue(bounds.bottom <= panel.getHeight());
+        });
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP);
+    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
+    main(
+        () -> {
+          View panel = (View) ((View) detailField("detailArt")).getParent();
+          assertEquals(0, panel.getScrollY());
+          assertEquals(0, panel.getScrollX());
+        });
+  }
+
+  private Object detailField(String name) {
+    try {
+      java.lang.reflect.Field field = NativeHomeView.class.getDeclaredField(name);
+      field.setAccessible(true);
+      return field.get(activity.home);
+    } catch (ReflectiveOperationException e) {
+      throw new AssertionError(e);
+    }
   }
 
   @Test
