@@ -43,7 +43,8 @@ public class NativeUiTestActivity extends Activity implements NativeHomeView.Lis
 
   static Library.Snapshot fixtureSnapshot() {
     Library.Snapshot snapshot = new Library.Snapshot();
-    snapshot.channelCapability = "available";
+    snapshot.channelCapability = snapshot.watchNextCapability = "available";
+    snapshot.channelsRead = true;
     for (int i = 0; i < 7; i++) {
       Library.App app =
           new Library.App(

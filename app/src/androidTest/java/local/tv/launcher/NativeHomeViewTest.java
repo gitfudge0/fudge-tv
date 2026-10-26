@@ -170,10 +170,8 @@ public class NativeHomeViewTest {
           NativeRowAdapter rows =
               (NativeRowAdapter)
                   ((RecyclerView) activity.home.findViewById(R.id.home_rows)).getAdapter();
-          NativeRowAdapter.Row recommendations = rows.getCurrentList().get(2);
-          assertEquals("Recommendations", recommendations.title);
-          assertTrue(recommendations.cards.isEmpty());
-          assertEquals("No recommendations shared by App 1.", recommendations.subtitle);
+          for (NativeRowAdapter.Row row : rows.getCurrentList())
+            assertNotEquals("Empty recommendation rails must be absent", "recommendations", row.id);
         });
     instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
     NativeUiTestDriver.awaitFocus(instrumentation, activity, "movie:tt1000000");
@@ -690,7 +688,7 @@ public class NativeHomeViewTest {
   }
 
   @Test
-  public void emptyAndDisabledRowsAreSkippedAndExplainUnavailableHistoryOnce() {
+  public void emptyAndDisabledRowsAreSkippedWithoutEmptyHistoryState() {
     main(
         () -> {
           Library.Snapshot data = NativeUiTestActivity.fixtureSnapshot();
@@ -709,7 +707,7 @@ public class NativeHomeViewTest {
     main(
         () -> {
           RecyclerView rows = activity.home.findViewById(R.id.home_rows);
-          assertEquals(1, countText(activity.home, "Provider history unavailable."));
+          assertEquals(0, countText(activity.home, "Provider history unavailable."));
         });
   }
 

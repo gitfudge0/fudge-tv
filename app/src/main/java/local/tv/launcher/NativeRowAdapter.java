@@ -92,8 +92,34 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
 
   @Override
   public void submitList(List<Row> rows) {
+    // Preserve the logical fallback before a disappearing focused row is detached.
+    if (vertical != null && vertical.hasFocus()) {
+      View focus = vertical.findFocus();
+      RecyclerView.ViewHolder focused =
+          focus == null ? null : vertical.findContainingViewHolder(focus);
+      if (focused instanceof Holder) {
+        Holder holder = (Holder) focused;
+        boolean retained = false;
+        if (rows != null) for (Row row : rows) if (row.id.equals(holder.rowId)) retained = true;
+        if (!retained && "recommendations".equals(holder.rowId) && rows != null)
+          for (Row row : rows) if ("apps".equals(row.id)) recordPendingRow(row);
+      }
+    }
     requestedRows = rows == null ? Collections.emptyList() : rows;
-    super.submitList(rows);
+    listPending = true;
+    super.submitList(
+        rows,
+        () -> {
+          if (requestedRows != rows) return;
+          listPending = false;
+          if (vertical != null) vertical.requestLayout();
+        });
+  }
+
+  private boolean listPending;
+
+  boolean hasPendingRows() {
+    return listPending;
   }
 
   private RecyclerView vertical;

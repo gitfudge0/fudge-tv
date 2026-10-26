@@ -139,6 +139,7 @@ final class Recommendations {
           /* isolate malformed records */
         }
       }
+      out.channelsRead = true;
       out.channelCapability = "empty";
     } catch (OperationCanceledException canceled) {
       throw canceled;
@@ -170,6 +171,7 @@ final class Recommendations {
           query(source, TvContract.buildPreviewProgramsUriForChannel(row.numericId), signal)) {
         if (cursor == null) {
           failed = true;
+          out.failedChannels.add(row.id);
           continue;
         }
         Library.Channel appRow = appRows.get(row.owner);
@@ -212,8 +214,10 @@ final class Recommendations {
         throw canceled;
       } catch (SecurityException denied) {
         restricted = true;
+        out.failedChannels.add(row.id);
       } catch (RuntimeException unavailable) {
         failed = true;
+        out.failedChannels.add(row.id);
       }
     }
     for (Library.Channel appRow : appRows.values()) {

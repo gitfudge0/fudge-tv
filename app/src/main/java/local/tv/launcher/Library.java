@@ -46,7 +46,8 @@ final class Library {
     final List<Channel> channels = new ArrayList<>();
     final List<Channel> recommendationChannels = new ArrayList<>();
     final List<TvInputs.Entry> inputs = new ArrayList<>();
-    boolean providerAvailable, recommendationsLoading, watchNextLoading;
+    boolean providerAvailable, recommendationsLoading, watchNextLoading, channelsRead;
+    final Set<String> failedChannels = new HashSet<>();
     String channelCapability = "unavailable", watchNextCapability = "unavailable";
     String channelStatus = "Your apps have not shared preview channels.";
     boolean usageEnabled, listingsGranted;
@@ -154,6 +155,8 @@ final class Library {
     result.programs.addAll(source.programs);
     result.channels.addAll(source.channels);
     result.recommendationChannels.addAll(source.recommendationChannels);
+    result.channelsRead = source.channelsRead;
+    result.failedChannels.addAll(source.failedChannels);
     result.providerAvailable = source.providerAvailable;
     result.channelCapability = source.channelCapability;
     result.watchNextCapability = source.watchNextCapability;

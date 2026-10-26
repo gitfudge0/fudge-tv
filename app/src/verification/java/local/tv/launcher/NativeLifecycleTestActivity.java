@@ -1,5 +1,6 @@
 package local.tv.launcher;
 
+import android.content.Intent;
 import java.io.File;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -16,7 +17,7 @@ public final class NativeLifecycleTestActivity extends MainActivity {
 
   static final class Fixture {
     final AtomicInteger searches = new AtomicInteger();
-    boolean stagedLibrary;
+    boolean stagedLibrary, cacheStartup;
     final AtomicInteger libraryLoads = new AtomicInteger();
     final CountDownLatch libraryStarted = new CountDownLatch(1);
     final CountDownLatch releaseWatch = new CountDownLatch(1);
@@ -61,6 +62,15 @@ public final class NativeLifecycleTestActivity extends MainActivity {
     Library.Snapshot apps = NativeUiTestActivity.fixtureSnapshot();
     apps.programs.clear();
     apps.channels.clear();
+    if (fixture.cacheStartup) {
+      Library.App publisher =
+          new Library.App(
+              getPackageName(),
+              "Cached publisher",
+              new Intent(Intent.ACTION_MAIN).setPackage(getPackageName()));
+      apps.apps.add(0, publisher);
+      apps.allApps.add(publisher);
+    }
     return apps;
   }
 
@@ -81,8 +91,10 @@ public final class NativeLifecycleTestActivity extends MainActivity {
         current.libraryCanceled.countDown();
         throw canceled;
       }
-      Library.Snapshot watch = NativeUiTestActivity.fixtureSnapshot();
+      Library.Snapshot watch =
+          current.cacheStartup ? Library.copy(apps) : NativeUiTestActivity.fixtureSnapshot();
       watch.channels.clear();
+      if (current.cacheStartup) watch.watchNextCapability = "empty";
       watchCallback.accept(watch);
       current.watchReady.countDown();
       awaitLibrary(current.releasePreviews, signal);

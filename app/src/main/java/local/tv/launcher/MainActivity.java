@@ -197,7 +197,16 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
                     + (android.os.SystemClock.elapsedRealtime() - started)
                     + " ms; apps="
                     + inventory.apps.size());
-            Library.Snapshot interim = retainedRecommendations(inventory, previous, true);
+            Library.Snapshot cached = RecommendationCache.read(getApplicationContext(), inventory);
+            Library.Snapshot retained =
+                previous.programs.isEmpty() && previous.channels.isEmpty() ? cached : previous;
+            android.util.Log.i(
+                "FudgeLibrary",
+                "Cached recommendations ready; watch="
+                    + cached.programs.size()
+                    + "; apps="
+                    + cached.channels.size());
+            Library.Snapshot interim = retainedRecommendations(inventory, retained, true);
             deliverLibrary(interim, generation, false);
             Library.Snapshot next =
                 loadLibraryRecommendations(
@@ -210,8 +219,13 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
                               + (android.os.SystemClock.elapsedRealtime() - started)
                               + " ms; items="
                               + watch.programs.size());
-                      deliverLibrary(
-                          retainedRecommendations(watch, previous, false), generation, false);
+                      Library.Snapshot stage =
+                          retainedRecommendations(
+                              RecommendationCache.reconcile(watch, interim), interim, false);
+                      cancellation.throwIfCanceled();
+                      // Watch Next success/removals must survive even if preview reads stall.
+                      RecommendationCache.write(getApplicationContext(), stage);
+                      deliverLibrary(stage, generation, false);
                     });
             android.util.Log.i(
                 "FudgeLibrary",
@@ -219,7 +233,11 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
                     + (android.os.SystemClock.elapsedRealtime() - started)
                     + " ms; apps="
                     + next.channels.size());
-            if (!Thread.currentThread().isInterrupted()) deliverLibrary(next, generation, true);
+            cancellation.throwIfCanceled();
+            Library.Snapshot refreshed = RecommendationCache.reconcile(next, interim);
+            RecommendationCache.write(getApplicationContext(), refreshed);
+            if (!Thread.currentThread().isInterrupted())
+              deliverLibrary(refreshed, generation, true);
           } catch (OperationCanceledException ignored) {
             // Lifecycle cancellation invalidates every already-posted stage by generation.
           } catch (RuntimeException failure) {
@@ -242,9 +260,11 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
   private Library.Snapshot retainedRecommendations(
       Library.Snapshot fresh, Library.Snapshot previous, boolean retainWatch) {
     Library.Snapshot result = Library.copy(fresh);
+    result.channels.clear();
+    result.recommendationChannels.clear();
     java.util.Set<String> installed = new java.util.HashSet<>();
-    for (Library.App app : fresh.allApps) if (app.launch != null) installed.add(app.id);
-    for (Library.App app : fresh.apps) if (app.launch != null) installed.add(app.id);
+    for (Library.App app : fresh.allApps)
+      if (app.launch != null && RecommendationPolicy.eligibleOwner(app.id)) installed.add(app.id);
     if (retainWatch) {
       result.programs.clear();
       for (Library.Program program : previous.programs)
@@ -295,6 +315,9 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
       result.channelStatus = "Recommendations are turned off.";
       return result;
     }
+    int limit = RecommendationPolicy.limit(prefs.getInt("maxItems", 20));
+    if (result.programs.size() > limit)
+      result.programs.subList(limit, result.programs.size()).clear();
     Set<String> hidden = prefs.getStringSet("hidden", Collections.emptySet());
     result.channels.clear();
     for (Library.Channel channel : source.channels) {
@@ -309,7 +332,8 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
       visible.numericId = channel.numericId;
       visible.order = channel.order;
       for (Library.Program program : channel.programs)
-        if (!hidden.contains(program.channelId)) visible.programs.add(program);
+        if (!hidden.contains(program.channelId) && visible.programs.size() < limit)
+          visible.programs.add(program);
       if (!visible.programs.isEmpty()) result.channels.add(visible);
     }
     return result;

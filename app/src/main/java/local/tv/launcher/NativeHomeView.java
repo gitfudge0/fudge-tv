@@ -248,9 +248,36 @@ final class NativeHomeView extends FrameLayout {
             });
   }
 
+  private boolean startupLayoutRequested, startupLayoutReady;
+
   private void tryStartupFocus() {
     if (!startupFocusPending || released || !active || !hasWindowFocus()) return;
-    if (snapshot.apps.isEmpty() && snapshot.watchNextLoading) return;
+    if (snapshot.apps.isEmpty() && snapshot.watchNextLoading || homeAdapter.hasPendingRows())
+      return;
+    if (!startupLayoutRequested) {
+      startupLayoutRequested = true;
+      // Real rows may have been inserted above the initial Inputs-only adapter anchor.
+      // Restore the initial inset before applying focus against the resulting geometry.
+      homeRows.post(
+          () -> {
+            if (!startupFocusPending || released) return;
+            homeRows
+                .getViewTreeObserver()
+                .addOnGlobalLayoutListener(
+                    new android.view.ViewTreeObserver.OnGlobalLayoutListener() {
+                      @Override
+                      public void onGlobalLayout() {
+                        homeRows.getViewTreeObserver().removeOnGlobalLayoutListener(this);
+                        startupLayoutReady = true;
+                        tryStartupFocus();
+                      }
+                    });
+            ((LinearLayoutManager) homeRows.getLayoutManager()).scrollToPositionWithOffset(0, 0);
+            homeRows.requestLayout();
+          });
+      return;
+    }
+    if (!startupLayoutReady) return;
     homeAdapter.focusFirst(() -> homeButton.requestFocus());
     startupFocusPending = false;
     if (!initialRevealDone) {
@@ -346,15 +373,16 @@ final class NativeHomeView extends FrameLayout {
     List<NativeRowAdapter.Row> rows = new ArrayList<>();
     List<NativeCard> watch = new ArrayList<>();
     for (Library.Program program : snapshot.programs) watch.add(NativeCard.program(program, true));
-    rows.add(
-        new NativeRowAdapter.Row(
-            "watch",
-            "Continue Watching",
-            watch.isEmpty()
-                ? snapshot.programStatus
-                : snapshot.watchNextLoading ? "Updating shared history…" : "",
-            NativeCard.Kind.WATCH,
-            watch));
+    if (!watch.isEmpty())
+      rows.add(
+          new NativeRowAdapter.Row(
+              "watch",
+              "Continue Watching",
+              watch.isEmpty()
+                  ? snapshot.programStatus
+                  : snapshot.watchNextLoading ? "Updating shared history…" : "",
+              NativeCard.Kind.WATCH,
+              watch));
     List<NativeCard> apps = new ArrayList<>();
     for (Library.App app : snapshot.apps) apps.add(NativeCard.app(app));
     rows.add(
@@ -396,27 +424,29 @@ final class NativeHomeView extends FrameLayout {
                 : selected.label
                     + " · Shared by this app"
                     + (snapshot.recommendationsLoading ? " · Updating…" : "");
-    rows.add(
-        new NativeRowAdapter.Row(
-            "recommendations",
-            "Recommendations",
-            recommendationSource,
-            NativeCard.Kind.RECOMMENDATION,
-            recommendations,
-            "recommendations:" + (selectedAppId == null ? "none" : selectedAppId)));
+    if (!recommendations.isEmpty())
+      rows.add(
+          new NativeRowAdapter.Row(
+              "recommendations",
+              "Recommendations",
+              recommendationSource,
+              NativeCard.Kind.RECOMMENDATION,
+              recommendations,
+              "recommendations:" + (selectedAppId == null ? "none" : selectedAppId)));
     List<NativeCard> discovery = new ArrayList<>();
     for (JSONObject item : catalog) discovery.add(NativeCard.title(item));
-    rows.add(
-        new NativeRowAdapter.Row(
-            "discovery",
-            "Discover",
-            catalogStale
-                ? "Previously fetched Cinemeta catalog"
-                : discovery.isEmpty()
-                    ? catalogMessage
-                    : "Live discovery from Cinemeta. Explore popular movies and series.",
-            NativeCard.Kind.POSTER,
-            discovery));
+    if (!discovery.isEmpty())
+      rows.add(
+          new NativeRowAdapter.Row(
+              "discovery",
+              "Discover",
+              catalogStale
+                  ? "Previously fetched Cinemeta catalog"
+                  : discovery.isEmpty()
+                      ? catalogMessage
+                      : "Live discovery from Cinemeta. Explore popular movies and series.",
+              NativeCard.Kind.POSTER,
+              discovery));
     List<NativeCard> inputs = new ArrayList<>();
     for (TvInputs.Entry input : snapshot.inputs) inputs.add(NativeCard.input(input));
     if (inputs.isEmpty())
