@@ -41,6 +41,8 @@ final class NativeImages implements AutoCloseable {
           return image.getAllocationByteCount();
         }
       };
+  private final WeakHashMap<ImageView, String> displayed = new WeakHashMap<>();
+  private boolean active = true;
   private volatile boolean closed;
 
   private static final class Work {
@@ -75,12 +77,14 @@ final class NativeImages implements AutoCloseable {
     int width = Math.max(1, Math.min(1920, widthPx));
     int height = Math.max(1, Math.min(1080, heightPx));
     String key = hash(rawUri + ":" + width + "x" + height);
+    if (key.equals(displayed.get(target))) return;
     Work current = targets.get(target);
     if (current != null && key.equals(current.key)) return;
     clear(target);
     Bitmap cached = memory.get(key);
     if (cached != null) {
       target.setImageBitmap(cached);
+      displayed.put(target, key);
       return;
     }
     Work work = inFlight.get(key);
@@ -103,12 +107,24 @@ final class NativeImages implements AutoCloseable {
   }
 
   void clear(ImageView target) {
+    target.animate().cancel();
+    target.setAlpha(1f);
+    displayed.remove(target);
     Work previous = targets.remove(target);
     if (previous != null && !targets.containsValue(previous)) {
       previous.task.cancel(true);
       executor.remove(previous.task);
       if (inFlight.get(previous.key) == previous) inFlight.remove(previous.key);
     }
+  }
+
+  void setActive(boolean active) {
+    this.active = active;
+    if (!active)
+      for (ImageView target : displayed.keySet()) {
+        target.animate().cancel();
+        target.setAlpha(1f);
+      }
   }
 
   void showApp(ImageView target, Library.App app, boolean icon) {
@@ -173,7 +189,15 @@ final class NativeImages implements AutoCloseable {
       Map.Entry<ImageView, Work> entry = entries.next();
       if (entry.getValue() != work) continue;
       ImageView target = entry.getKey();
-      if (!closed && image != null && target != null) target.setImageBitmap(image);
+      if (!closed && image != null && target != null) {
+        target.animate().cancel();
+        target.setImageBitmap(image);
+        displayed.put(target, work.key);
+        boolean motion =
+            active && target.isShown() && target.isAttachedToWindow() && !NativeUi.reducedMotion();
+        target.setAlpha(motion ? 0f : 1f);
+        if (motion) target.animate().alpha(1).setDuration(180).start();
+      }
       entries.remove();
     }
   }
@@ -281,6 +305,11 @@ final class NativeImages implements AutoCloseable {
     closed = true;
     for (Work work : inFlight.values()) work.task.cancel(true);
     inFlight.clear();
+    for (ImageView target : displayed.keySet()) {
+      target.animate().cancel();
+      target.setAlpha(1f);
+    }
+    displayed.clear();
     targets.clear();
     executor.shutdownNow();
     synchronized (connections) {

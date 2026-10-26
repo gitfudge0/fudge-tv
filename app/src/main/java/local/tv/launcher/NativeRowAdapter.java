@@ -1,5 +1,6 @@
 package local.tv.launcher;
 
+import android.animation.ValueAnimator;
 import android.graphics.Color;
 import android.os.Parcelable;
 import android.view.View;
@@ -561,7 +562,10 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
   public void onBindViewHolder(@NonNull Holder holder, int position) {
     Row data = getItem(position);
     if (holder.cards == null) return;
+    boolean wasBound = holder.rowId != null;
+    boolean wasEmpty = holder.cards.getCurrentList().isEmpty();
     boolean changedRow = !data.stateKey.equals(holder.stateKey);
+    resetSectionMotion(holder);
     boolean hadFocus = holder.row.hasFocus();
     saveState(holder);
     holder.rowId = data.id;
@@ -588,6 +592,7 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
           if ("apps".equals(fallback.id)) recordPendingRow(fallback);
       } else recordPendingRow(data);
     }
+    holder.cards.setAnimateRemovals(!changedRow);
     holder.cards.submitList(
         data.cards,
         () -> {
@@ -598,14 +603,40 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
             if (state.layout == null) layout.scrollToPositionWithOffset(0, 0);
             else layout.onRestoreInstanceState(state.layout);
           }
-          if (changedRow
-              && "recommendations".equals(data.id)
+          if (wasBound
               && active
-              && !NativeUi.reducedMotion()
-              && !data.cards.isEmpty()) {
-            holder.row.setAlpha(0);
-            holder.row.setTranslationY(ui.px(6));
-            holder.row.animate().alpha(1).translationY(0).setDuration(140).start();
+              && holder.itemView.isShown()
+              && holder.itemView.isAttachedToWindow()
+              && !NativeUi.reducedMotion()) {
+            if (changedRow && "recommendations".equals(data.id)) {
+              // Animate the source heading, explanation, empty state and rail as one region.
+              holder.itemView.setAlpha(0);
+              holder.itemView.setTranslationY(ui.px(6));
+              holder.itemView.animate().alpha(1).translationY(0).setDuration(140).start();
+            } else if (wasEmpty
+                && !data.cards.isEmpty()
+                && pendingFocus == null
+                && vertical != null
+                && !vertical.hasFocus()) {
+              // Only expand unfocused rails. Focused TV navigation keeps fixed geometry.
+              int height = holder.fullHeight;
+              holder.heightMotion = ValueAnimator.ofInt(0, height);
+              holder.heightMotion.setDuration(180);
+              holder.heightMotion.addUpdateListener(
+                  a -> {
+                    ViewGroup.LayoutParams params = holder.row.getLayoutParams();
+                    int heightAtFrame = (Integer) a.getAnimatedValue();
+                    if (params.height != heightAtFrame) {
+                      params.height = heightAtFrame;
+                      holder.row.setLayoutParams(params);
+                    }
+                  });
+              holder.heightMotion.start();
+            } else if (wasEmpty && !data.cards.isEmpty()) {
+              // Loading completion should remain visible while TV focus stays on another rail.
+              holder.itemView.setAlpha(.65f);
+              holder.itemView.animate().alpha(1).setDuration(180).start();
+            }
           }
         });
     boolean explained = data.subtitle != null && !data.subtitle.isEmpty();
@@ -615,6 +646,19 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
     // artwork space.
     ViewGroup group = (ViewGroup) holder.itemView;
     group.getChildAt(2).setVisibility(data.cards.isEmpty() ? View.GONE : View.VISIBLE);
+  }
+
+  private void resetSectionMotion(Holder holder) {
+    holder.itemView.animate().cancel();
+    holder.itemView.setAlpha(1);
+    holder.itemView.setTranslationY(0);
+    if (holder.heightMotion != null) holder.heightMotion.cancel();
+    holder.heightMotion = null;
+    ViewGroup.LayoutParams params = holder.row.getLayoutParams();
+    if (params.height != holder.fullHeight) {
+      params.height = holder.fullHeight;
+      holder.row.setLayoutParams(params);
+    }
   }
 
   private void saveState(Holder holder) {
@@ -627,11 +671,19 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
   @Override
   public void onViewDetachedFromWindow(@NonNull Holder holder) {
     saveState(holder);
+    resetSectionMotion(holder);
+    holder.cards.setInstant(true);
+  }
+
+  @Override
+  public void onViewAttachedToWindow(@NonNull Holder holder) {
+    holder.cards.setInstant(!active);
   }
 
   @Override
   public void onViewRecycled(@NonNull Holder holder) {
     saveState(holder);
+    resetSectionMotion(holder);
     holder.generation++;
     holder.rowId = null;
     if (holder.row != null) {
@@ -674,6 +726,16 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
   void setActive(boolean active) {
     this.active = active;
     if (!active) cancelPendingFocus();
+    if (vertical != null) {
+      for (int i = 0; i < vertical.getChildCount(); i++) {
+        RecyclerView.ViewHolder viewHolder = vertical.getChildViewHolder(vertical.getChildAt(i));
+        if (viewHolder instanceof Holder) {
+          Holder holder = (Holder) viewHolder;
+          holder.cards.setInstant(!active);
+          if (!active) resetSectionMotion(holder);
+        }
+      }
+    }
   }
 
   static final class Holder extends RecyclerView.ViewHolder {
@@ -682,6 +744,8 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
     final RowView row;
     String rowId, stateKey;
     long generation;
+    final int fullHeight;
+    ValueAnimator heightMotion;
 
     Holder(
         View view,
@@ -696,6 +760,7 @@ final class NativeRowAdapter extends ListAdapter<NativeRowAdapter.Row, NativeRow
       this.empty = empty;
       this.cards = cards;
       this.row = row;
+      this.fullHeight = row.getLayoutParams().height;
     }
   }
 }

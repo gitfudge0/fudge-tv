@@ -315,11 +315,20 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
     return result;
   }
 
+  private boolean refreshFeedbackLibrary, refreshFeedbackCatalog;
+
+  private void updateRefreshFeedback() {
+    home.setRefreshBusy(refreshFeedbackLibrary || refreshFeedbackCatalog);
+  }
+
   private void finishLibraryRefresh() {
     libraryLoading = false;
     if (libraryDirty) {
       libraryDirty = false;
       refreshLibrary();
+    } else {
+      refreshFeedbackLibrary = false;
+      updateRefreshFeedback();
     }
   }
 
@@ -342,11 +351,20 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
     network.submit(
         LatestRequests.Lane.HOME,
         () -> {
-          JSONObject cached = catalog.cachedHome();
-          if (cached != null) deliverHome(cached, generation);
-          if (cached == null || cached.optBoolean("stale")) {
-            JSONObject result = catalog.home();
-            if (!Thread.currentThread().isInterrupted()) deliverHome(result, generation);
+          try {
+            JSONObject cached = catalog.cachedHome();
+            if (cached != null) deliverHome(cached, generation);
+            if (cached == null || cached.optBoolean("stale")) {
+              JSONObject result = catalog.home();
+              if (!Thread.currentThread().isInterrupted()) deliverHome(result, generation);
+            }
+          } finally {
+            main.post(
+                () -> {
+                  if (!resumed || generation != catalogGeneration) return;
+                  refreshFeedbackCatalog = false;
+                  updateRefreshFeedback();
+                });
           }
         });
   }
@@ -504,6 +522,8 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
 
   @Override
   public void onRefresh() {
+    refreshFeedbackLibrary = refreshFeedbackCatalog = true;
+    updateRefreshFeedback();
     refreshLibrary();
     loadHome();
   }
@@ -846,6 +866,8 @@ public class MainActivity extends Activity implements NativeHomeView.Listener {
   @Override
   protected void onPause() {
     resumed = false;
+    refreshFeedbackLibrary = refreshFeedbackCatalog = false;
+    home.setRefreshBusy(false);
     home.setActive(false);
     appSearch.cancel();
     network.cancelAll();

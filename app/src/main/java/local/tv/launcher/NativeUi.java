@@ -18,6 +18,8 @@ final class NativeUi {
   final Context context;
   final float scale;
   final Typeface font;
+  private final java.util.WeakHashMap<View, android.animation.ValueAnimator> surfaces =
+      new java.util.WeakHashMap<>();
 
   NativeUi(Context context) {
     this.context = context;
@@ -55,12 +57,24 @@ final class NativeUi {
     button.setMinimumWidth(0);
     button.setPadding(px(23), px(14), px(23), px(14));
     button.setBackground(surface(0x30ffffff, 9));
-    button.setOnClickListener(v -> click.run());
+    button.setOnClickListener(
+        v -> {
+          if (!reducedMotion()) {
+            button.animate().cancel();
+            button.animate().withEndAction(null).setStartDelay(0);
+            button.setAlpha(1);
+            button.setTranslationY(0);
+            button.setScaleX(.96f);
+            button.setScaleY(.96f);
+            button.animate().scaleX(1).scaleY(1).setDuration(140).start();
+          }
+          click.run();
+        });
     button.setOnFocusChangeListener(
         (v, focused) -> {
-          button.setTextColor(focused ? BACKGROUND : Color.WHITE);
-          button.setBackground(surface(focused ? Color.WHITE : 0x30ffffff, 9));
-          button.setElevation(focused ? px(10) : 0);
+          animateSurface(
+              button, focused ? Color.WHITE : 0x30ffffff, focused ? BACKGROUND : Color.WHITE, 9);
+          focusMotion(button, focused, px(10));
         });
     return button;
   }
@@ -75,13 +89,69 @@ final class NativeUi {
     surface.addState(new int[] {android.R.attr.state_focused}, surface(Color.WHITE, 22));
     surface.addState(new int[] {android.R.attr.state_selected}, surface(0x25ffffff, 22));
     surface.addState(new int[0], surface(Color.TRANSPARENT, 22));
+    surface.setEnterFadeDuration(reducedMotion() ? 0 : 160);
+    surface.setExitFadeDuration(reducedMotion() ? 0 : 160);
     button.setBackground(surface);
     button.setOnFocusChangeListener(
         (view, focused) -> {
-          button.setElevation(focused ? px(7) : 0);
+          updateNavMotion(button);
+          focusMotion(button, focused, px(7));
           button.setTextColor(focused ? BACKGROUND : Color.WHITE);
         });
     return button;
+  }
+
+  void updateNavMotion(Button button) {
+    if (button.getBackground() instanceof StateListDrawable) {
+      StateListDrawable background = (StateListDrawable) button.getBackground();
+      background.setEnterFadeDuration(reducedMotion() ? 0 : 160);
+      background.setExitFadeDuration(reducedMotion() ? 0 : 160);
+      if (reducedMotion()) background.jumpToCurrentState();
+    }
+  }
+
+  void inputFocus(android.widget.EditText input, boolean focused) {
+    animateSurface(input, focused ? 0x30ffffff : 0x18ffffff, Color.WHITE, 12);
+    ((GradientDrawable) input.getBackground())
+        .setStroke(px(2), focused ? 0xfff0eee9 : Color.TRANSPARENT);
+    focusMotion(input, focused, px(4));
+  }
+
+  private void animateSurface(TextView button, int color, int text, int radius) {
+    android.animation.ValueAnimator previous = surfaces.remove(button);
+    if (previous != null) previous.cancel();
+    int from =
+        button.getBackground() instanceof GradientDrawable
+            ? ((GradientDrawable) button.getBackground()).getColor().getDefaultColor()
+            : Color.TRANSPARENT;
+    int oldText = button.getCurrentTextColor();
+    GradientDrawable background = surface(from, radius);
+    button.setBackground(background);
+    if (reducedMotion()) {
+      background.setColor(color);
+      button.setTextColor(text);
+      return;
+    }
+    android.animation.ValueAnimator animation = android.animation.ValueAnimator.ofFloat(0, 1);
+    surfaces.put(button, animation);
+    android.animation.ArgbEvaluator colors = new android.animation.ArgbEvaluator();
+    animation.addUpdateListener(
+        a -> {
+          float progress = (float) a.getAnimatedValue();
+          background.setColor((int) colors.evaluate(progress, from, color));
+          button.setTextColor((int) colors.evaluate(progress, oldText, text));
+        });
+    animation.addListener(
+        new android.animation.AnimatorListenerAdapter() {
+          @Override
+          public void onAnimationEnd(android.animation.Animator ended) {
+            if (surfaces.get(button) == animation) surfaces.remove(button);
+            animation.removeAllUpdateListeners();
+            animation.removeAllListeners();
+          }
+        });
+    animation.setDuration(160);
+    animation.start();
   }
 
   GradientDrawable surface(int color, int radius) {
@@ -97,12 +167,46 @@ final class NativeUi {
     return drawable;
   }
 
+  static void focusMotion(View view, boolean focused, float elevation) {
+    view.animate().cancel();
+    view.animate().withEndAction(null).setStartDelay(0);
+    view.setAlpha(1);
+    view.setTranslationY(0);
+    if (reducedMotion()) view.setTranslationZ(focused ? elevation : 0);
+    else
+      view.animate()
+          .translationZ(focused ? elevation : 0)
+          .scaleX(1)
+          .scaleY(1)
+          .setDuration(160)
+          .start();
+  }
+
+  static void reveal(View view, float offset) {
+    view.animate().cancel();
+    view.animate().withEndAction(null).setStartDelay(0);
+    view.setAlpha(1);
+    view.setTranslationY(0);
+    view.setScaleX(1);
+    view.setScaleY(1);
+    if (reducedMotion() || !view.isAttachedToWindow()) return;
+    view.setAlpha(0);
+    view.setTranslationY(offset);
+    view.animate()
+        .alpha(1)
+        .translationY(0)
+        .setDuration(200)
+        .setInterpolator(new DecelerateInterpolator())
+        .start();
+  }
+
   static boolean reducedMotion() {
     return !android.animation.ValueAnimator.areAnimatorsEnabled();
   }
 
   static void move(View view, float x, float scale, boolean instant) {
     view.animate().cancel();
+    view.animate().withEndAction(null).setStartDelay(0);
     if (instant || reducedMotion()) {
       view.setTranslationX(x);
       view.setScaleX(scale);

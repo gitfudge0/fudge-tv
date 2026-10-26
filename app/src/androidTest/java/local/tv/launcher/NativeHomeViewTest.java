@@ -448,7 +448,18 @@ public class NativeHomeViewTest {
             RecyclerView vertical = activity.home.findViewById(R.id.home_rows);
             NativeRowAdapter.Holder holder =
                 (NativeRowAdapter.Holder) vertical.findViewHolderForAdapterPosition(index);
-            assertNotNull(holder);
+            androidx.recyclerview.widget.LinearLayoutManager verticalLayout =
+                (androidx.recyclerview.widget.LinearLayoutManager) vertical.getLayoutManager();
+            assertNotNull(
+                "Missing target row "
+                    + index
+                    + "; visible "
+                    + verticalLayout.findFirstVisibleItemPosition()
+                    + ".."
+                    + verticalLayout.findLastVisibleItemPosition()
+                    + "; scroll state "
+                    + vertical.getScrollState(),
+                holder);
             repeated[0] = !seen.add(holder);
             RecyclerView horizontal = (RecyclerView) ((ViewGroup) holder.itemView).getChildAt(2);
             androidx.recyclerview.widget.LinearLayoutManager layout =

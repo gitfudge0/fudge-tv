@@ -82,7 +82,16 @@ final class NativeHomeView extends FrameLayout {
   private List<Library.Program> appSearchItems = Collections.emptyList();
   private String searchMessage = "", query = "", submittedQuery = "";
   private boolean active, searchVisible, searchPending, released, catalogStale;
-  private Dialog dialog;
+  private Dialog dialog, exitingDialog;
+  private View exitingPanel;
+  private int dialogGeneration;
+  private android.animation.ValueAnimator scrimAnimator;
+  private ScrollView dialogScroll;
+  private LinearLayout dialogPanel;
+  private boolean dialogSwap, initialRevealDone;
+  private int pageMotionGeneration;
+  private Button refreshButton;
+  private boolean refreshBusy;
   private String dialogKind = "";
   private View dialogReturnFocus;
   private JSONObject detailItem;
@@ -148,6 +157,7 @@ final class NativeHomeView extends FrameLayout {
     searchInput.setHint("Apps, movies, series…");
     searchInput.setContentDescription("Search apps and titles");
     searchInput.setBackground(ui.surface(0x18ffffff, 12));
+    searchInput.setOnFocusChangeListener((v, focused) -> ui.inputFocus(searchInput, focused));
     searchInput.setPadding(ui.px(20), ui.px(17), ui.px(20), ui.px(17));
     LinearLayout.LayoutParams inputLayout = new LinearLayout.LayoutParams(ui.px(1100), ui.px(78));
     inputLayout.leftMargin = ui.px(115);
@@ -243,6 +253,10 @@ final class NativeHomeView extends FrameLayout {
     if (snapshot.apps.isEmpty() && snapshot.watchNextLoading) return;
     homeAdapter.focusFirst(() -> homeButton.requestFocus());
     startupFocusPending = false;
+    if (!initialRevealDone) {
+      initialRevealDone = true;
+      NativeUi.reveal(homeRows, ui.px(14));
+    }
   }
 
   @Override
@@ -260,9 +274,11 @@ final class NativeHomeView extends FrameLayout {
     homeButton.setSelected(!searchVisible && !settings);
     searchButton.setSelected(searchVisible && !settings);
     settingsButton.setSelected(settings);
-    for (Button button : new Button[] {homeButton, searchButton, settingsButton})
+    for (Button button : new Button[] {homeButton, searchButton, settingsButton}) {
+      ui.updateNavMotion(button);
       button.setStateDescription(
           button.isSelected() ? getContext().getString(R.string.current_page) : null);
+    }
   }
 
   private void focusSearchNavigation() {
@@ -477,6 +493,7 @@ final class NativeHomeView extends FrameLayout {
       rows.add(
           new NativeRowAdapter.Row(
               "search-titles", "Movies and series", "Cinemeta", NativeCard.Kind.POSTER, titles));
+    String oldStatus = searchStatus.getText().toString();
     searchStatus.setText(
         query.isEmpty()
             ? "Enter a name to search your apps and Cinemeta."
@@ -486,9 +503,57 @@ final class NativeHomeView extends FrameLayout {
                     ? searchMessage
                     : rows.isEmpty() ? "No apps or titles found." : "");
     searchAdapter.submitList(rows);
+    if (active && searchVisible && !oldStatus.contentEquals(searchStatus.getText())) {
+      NativeUi.reveal(searchStatus, ui.px(5));
+      if (!searchPending && !appSearchPending && !rows.isEmpty())
+        NativeUi.reveal(searchRows, ui.px(10));
+    }
+  }
+
+  private void switchPage(boolean search) {
+    int generation = ++pageMotionGeneration;
+    View incoming = search ? searchPage : homeRows;
+    View outgoing = search ? homeRows : searchPage;
+    incoming.animate().cancel();
+    incoming.animate().withEndAction(null).setStartDelay(0);
+    outgoing.animate().cancel();
+    outgoing.animate().withEndAction(null).setStartDelay(0);
+    ((android.view.ViewGroup) outgoing).setDescendantFocusability(FOCUS_BLOCK_DESCENDANTS);
+    outgoing.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+    ((android.view.ViewGroup) incoming).setDescendantFocusability(FOCUS_AFTER_DESCENDANTS);
+    incoming.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_AUTO);
+    boolean appearing = incoming.getVisibility() != VISIBLE;
+    incoming.setVisibility(VISIBLE);
+    if (NativeUi.reducedMotion() || !active) {
+      incoming.setAlpha(1);
+      incoming.setTranslationY(0);
+      outgoing.setVisibility(GONE);
+      outgoing.setAlpha(1);
+      outgoing.setTranslationY(0);
+      return;
+    }
+    outgoing
+        .animate()
+        .alpha(0)
+        .translationY(-ui.px(10))
+        .setDuration(180)
+        .withEndAction(
+            () -> {
+              if (generation != pageMotionGeneration) return;
+              outgoing.setVisibility(GONE);
+              outgoing.setAlpha(1);
+              outgoing.setTranslationY(0);
+            })
+        .start();
+    if (appearing) {
+      incoming.setAlpha(0);
+      incoming.setTranslationY(ui.px(14));
+    }
+    incoming.animate().alpha(1).translationY(0).setDuration(200).start();
   }
 
   void showHome() {
+    boolean changedPage = searchVisible;
     cancelRowFocus();
     startupFocusPending = false;
     closeDialog(false);
@@ -498,20 +563,19 @@ final class NativeHomeView extends FrameLayout {
     submittedQuery = "";
     searchVisible = false;
     updateNavigationSelection();
-    searchPage.setVisibility(GONE);
-    homeRows.setVisibility(VISIBLE);
+    if (changedPage) switchPage(false);
     homeRows.scrollToPosition(0);
     homeAdapter.focusFirst(() -> homeButton.requestFocus());
   }
 
   void showSearch() {
+    boolean changedPage = !searchVisible;
     cancelRowFocus();
     startupFocusPending = false;
     closeDialog(false);
     searchVisible = true;
     updateNavigationSelection();
-    homeRows.setVisibility(GONE);
-    searchPage.setVisibility(VISIBLE);
+    if (changedPage) switchPage(true);
     searchInput.requestFocus();
     ((InputMethodManager) getContext().getSystemService(Context.INPUT_METHOD_SERVICE))
         .showSoftInput(searchInput, InputMethodManager.SHOW_IMPLICIT);
@@ -524,7 +588,33 @@ final class NativeHomeView extends FrameLayout {
 
   void setActive(boolean active) {
     this.active = active;
-    if (active) tryStartupFocus();
+    images.setActive(active);
+    updateNavigationSelection();
+    if (active) {
+      tryStartupFocus();
+    } else {
+      if (scrimAnimator != null) scrimAnimator.cancel();
+      if (exitingDialog != null) {
+        if (exitingPanel != null) exitingPanel.animate().cancel();
+        exitingDialog.dismiss();
+        exitingDialog = null;
+        exitingPanel = null;
+      }
+      if (dialogPanel != null) {
+        dialogPanel.animate().cancel();
+        dialogPanel.setAlpha(1);
+        dialogPanel.setTranslationX(0);
+        dialogPanel.setTranslationY(0);
+        dialog.getWindow().setDimAmount(.7f);
+      }
+      switchPage(searchVisible);
+      searchRows.animate().cancel();
+      searchRows.setAlpha(1);
+      searchRows.setTranslationY(0);
+      searchStatus.animate().cancel();
+      searchStatus.setAlpha(1);
+      searchStatus.setTranslationY(0);
+    }
     homeAdapter.setActive(active);
     searchAdapter.setActive(active);
     main.removeCallbacks(submitSearch);
@@ -534,6 +624,7 @@ final class NativeHomeView extends FrameLayout {
 
   void release() {
     released = true;
+    setActive(false);
     main.removeCallbacksAndMessages(null);
     closeDialog(false);
     homeRows.setAdapter(null);
@@ -555,6 +646,7 @@ final class NativeHomeView extends FrameLayout {
   }
 
   void showDetails(JSONObject item) {
+    boolean enrichment = "details".equals(dialogKind) && dialog != null;
     detailItem = item;
     if (!"details".equals(dialogKind) || dialog == null) {
       LinearLayout content = dialogContent("details");
@@ -628,6 +720,11 @@ final class NativeHomeView extends FrameLayout {
             : getContext().getString(R.string.starring_names, String.join(", ", cast)));
     images.load(detailArt, NativeCard.firstArt(item, "art", "poster"), ui.px(780), ui.px(330));
     dialog.setTitle(item.optString("title"));
+    if (enrichment) {
+      NativeUi.reveal(detailMeta, ui.px(4));
+      NativeUi.reveal(detailDescription, ui.px(4));
+      if (detailCast.getVisibility() == VISIBLE) NativeUi.reveal(detailCast, ui.px(4));
+    }
   }
 
   void showSettings() {
@@ -651,12 +748,15 @@ final class NativeHomeView extends FrameLayout {
     Button apps = ui.button("Your apps", this::showApps);
     content.addView(apps);
     addDialogAction(content, "TV controls & data access", listener::onControls);
-    addDialogAction(
-        content,
-        "Refresh",
-        () -> {
-          listener.onRefresh();
-        });
+    refreshButton =
+        ui.button(
+            refreshBusy ? "Refreshing…" : "Refresh",
+            () -> {
+              if (refreshBusy) return;
+              setRefreshBusy(true);
+              listener.onRefresh();
+            });
+    addDialogButton(content, refreshButton);
     TextView attribution =
         ui.text(
             "Movie and series metadata provided by Cinemeta.\n"
@@ -666,6 +766,16 @@ final class NativeHomeView extends FrameLayout {
     attribution.setPadding(0, ui.px(30), 0, 0);
     content.addView(attribution);
     showDialog(apps);
+  }
+
+  void setRefreshBusy(boolean busy) {
+    if (refreshBusy == busy) return;
+    refreshBusy = busy;
+    if (refreshButton != null) {
+      refreshButton.setText(busy ? "Refreshing…" : "Refresh");
+      refreshButton.setStateDescription(busy ? "Refreshing" : "Refresh complete");
+      NativeUi.reveal(refreshButton, ui.px(3));
+    }
   }
 
   private void showApps() {
@@ -704,15 +814,34 @@ final class NativeHomeView extends FrameLayout {
   }
 
   private LinearLayout dialogContent(String kind) {
+    ++dialogGeneration;
+    refreshButton = null;
+    if (exitingDialog != null) {
+      if (exitingPanel != null) exitingPanel.animate().cancel();
+      exitingDialog.dismiss();
+      exitingDialog = null;
+      exitingPanel = null;
+    }
+    if (scrimAnimator != null) scrimAnimator.cancel();
     cancelRowFocus();
     View restore = dialog == null ? findFocus() : dialogReturnFocus;
-    closeDialog(false);
+    boolean reuse = dialog != null && !"details".equals(dialogKind) && !"details".equals(kind);
+    if (reuse && dialogPanel != null) {
+      dialogPanel.animate().cancel();
+      dialogPanel.setDescendantFocusability(FOCUS_BLOCK_DESCENDANTS);
+    }
+    if (!reuse) closeDialog(false);
+    dialogSwap = reuse;
     dialogReturnFocus = restore;
     dialogKind = kind;
     updateNavigationSelection();
-    dialog = new Dialog(getContext());
-    dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
-    ScrollView scroll = new ScrollView(getContext());
+    if (!reuse) {
+      dialog = new Dialog(getContext());
+      dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+      dialogScroll = new ScrollView(getContext());
+    }
+    ScrollView scroll = dialogScroll;
+    scroll.removeAllViews();
     scroll.setFillViewport(false);
     LinearLayout content = new LinearLayout(getContext());
     content.setOrientation(LinearLayout.VERTICAL);
@@ -725,7 +854,8 @@ final class NativeHomeView extends FrameLayout {
     closeLayout.gravity = Gravity.END;
     content.addView(close, closeLayout);
     scroll.addView(content);
-    dialog.setContentView(scroll);
+    dialogPanel = content;
+    if (!reuse) dialog.setContentView(scroll);
     dialog.setOnKeyListener(
         (d, code, event) -> {
           if (code == KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_UP) {
@@ -745,14 +875,44 @@ final class NativeHomeView extends FrameLayout {
     if (window != null) {
       window.setBackgroundDrawableResource(android.R.color.transparent);
       window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+      window.setWindowAnimations(0);
       window.setDimAmount(.7f);
       window.setLayout(
           ui.px(850), Math.round(getResources().getDisplayMetrics().heightPixels * .9f));
     }
     first.requestFocus();
+    if (!dialogSwap) animateScrim(dialog, 0, .7f, 200);
+    if (dialogSwap && !NativeUi.reducedMotion()) {
+      dialogPanel.setTranslationX(ui.px("apps".equals(dialogKind) ? 22 : -22));
+      dialogPanel.setAlpha(0);
+      dialogPanel.animate().alpha(1).translationX(0).setDuration(200).start();
+    } else NativeUi.reveal(dialogPanel, ui.px(18));
+  }
+
+  private void animateScrim(Dialog target, float from, float to, long duration) {
+    if (scrimAnimator != null) scrimAnimator.cancel();
+    if (NativeUi.reducedMotion() || !active) {
+      target.getWindow().setDimAmount(to);
+      return;
+    }
+    scrimAnimator = android.animation.ValueAnimator.ofFloat(from, to);
+    scrimAnimator.setDuration(duration);
+    scrimAnimator.addUpdateListener(
+        a -> {
+          if (target.isShowing()) target.getWindow().setDimAmount((float) a.getAnimatedValue());
+        });
+    scrimAnimator.start();
   }
 
   private void closeDialog(boolean restore) {
+    if (!restore && exitingDialog != null) {
+      ++dialogGeneration;
+      if (exitingPanel != null) exitingPanel.animate().cancel();
+      exitingDialog.dismiss();
+      exitingDialog = null;
+      exitingPanel = null;
+      if (scrimAnimator != null) scrimAnimator.cancel();
+    }
     if (dialog == null) return;
     if ("details".equals(dialogKind)) {
       listener.onCancelDetails();
@@ -763,16 +923,46 @@ final class NativeHomeView extends FrameLayout {
     dialogKind = "";
     updateNavigationSelection();
     closing.setOnCancelListener(null);
-    closing.dismiss();
-    if (restore
-        && dialogReturnFocus != null
-        && dialogReturnFocus.isAttachedToWindow()
-        && dialogReturnFocus.isFocusable()) dialogReturnFocus.requestFocus();
-    else if (restore) {
-      if (searchVisible) searchInput.requestFocus();
-      else homeAdapter.focusFirst(() -> homeButton.requestFocus());
-    }
+    View panel = dialogPanel;
+    dialogPanel = null;
+    dialogScroll = null;
+    refreshButton = null;
+    final View returnFocus = dialogReturnFocus;
     dialogReturnFocus = null;
+    final int generation = ++dialogGeneration;
+    Runnable finishClose =
+        () -> {
+          closing.dismiss();
+          if (exitingDialog == closing) {
+            exitingDialog = null;
+            exitingPanel = null;
+          }
+          if (!restore || !active || released || generation != dialogGeneration || dialog != null)
+            return;
+          if (returnFocus != null && returnFocus.isAttachedToWindow() && returnFocus.isFocusable())
+            returnFocus.requestFocus();
+          else if (searchVisible) searchInput.requestFocus();
+          else homeAdapter.focusFirst(() -> homeButton.requestFocus());
+        };
+    if (panel != null) panel.animate().cancel();
+    if (restore && active && !released && panel != null && !NativeUi.reducedMotion()) {
+      ((android.view.ViewGroup) panel).setDescendantFocusability(FOCUS_BLOCK_DESCENDANTS);
+      exitingDialog = closing;
+      exitingPanel = panel;
+      closing
+          .getWindow()
+          .addFlags(
+              android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                  | android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
+      animateScrim(closing, .7f, 0, 180);
+      panel
+          .animate()
+          .alpha(0)
+          .translationY(ui.px(14))
+          .setDuration(180)
+          .withEndAction(finishClose)
+          .start();
+    } else finishClose.run();
   }
 
   boolean handleBack() {
@@ -787,7 +977,7 @@ final class NativeHomeView extends FrameLayout {
       return true;
     }
     if (!searchVisible && !homeButton.hasFocus()) {
-      homeRows.scrollToPosition(0);
+      scrollHomeToHeader();
       homeButton.requestFocus();
       return true;
     }
@@ -799,8 +989,35 @@ final class NativeHomeView extends FrameLayout {
     searchAdapter.cancelPendingFocus();
   }
 
+  private void scrollHomeToHeader() {
+    LinearLayoutManager layout = (LinearLayoutManager) homeRows.getLayoutManager();
+    if (NativeUi.reducedMotion() || layout == null || layout.findFirstVisibleItemPosition() > 3)
+      homeRows.scrollToPosition(0);
+    else {
+      androidx.recyclerview.widget.LinearSmoothScroller scroller =
+          new androidx.recyclerview.widget.LinearSmoothScroller(getContext()) {
+            @Override
+            protected int getVerticalSnapPreference() {
+              return SNAP_TO_START;
+            }
+
+            @Override
+            protected int calculateTimeForScrolling(int distance) {
+              return Math.min(200, super.calculateTimeForScrolling(distance));
+            }
+
+            @Override
+            protected int calculateTimeForDeceleration(int distance) {
+              return Math.min(240, super.calculateTimeForDeceleration(distance));
+            }
+          };
+      scroller.setTargetPosition(0);
+      layout.startSmoothScroll(scroller);
+    }
+  }
+
   private boolean focusHomeHeader() {
-    homeRows.scrollToPosition(0);
+    scrollHomeToHeader();
     return homeButton.requestFocus();
   }
 

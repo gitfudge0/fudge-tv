@@ -1,5 +1,6 @@
 package local.tv.launcher;
 
+import android.animation.ValueAnimator;
 import android.graphics.Color;
 import android.graphics.Rect;
 import android.text.TextUtils;
@@ -34,6 +35,124 @@ final class NativeCardAdapter extends ListAdapter<NativeCard, NativeCardAdapter.
 
   private int selectedPosition = -1;
   private boolean instant;
+  private boolean animateRemovals = true;
+  private final java.util.ArrayList<ValueAnimator> removals = new java.util.ArrayList<>();
+  private final java.util.ArrayList<Removal> pendingRemovals = new java.util.ArrayList<>();
+  private long listGeneration;
+  private android.view.ViewTreeObserver.OnPreDrawListener pendingReveal;
+
+  private static final class Removal {
+    final android.graphics.Bitmap bitmap;
+    final android.graphics.drawable.BitmapDrawable drawable;
+
+    Removal(android.graphics.Bitmap bitmap, android.graphics.drawable.BitmapDrawable drawable) {
+      this.bitmap = bitmap;
+      this.drawable = drawable;
+    }
+  }
+
+  private void discardPendingRemovals() {
+    for (Removal removal : pendingRemovals) removal.bitmap.recycle();
+    pendingRemovals.clear();
+  }
+
+  private void cancelPendingReveal() {
+    if (pendingReveal != null && row.getViewTreeObserver().isAlive())
+      row.getViewTreeObserver().removeOnPreDrawListener(pendingReveal);
+    pendingReveal = null;
+  }
+
+  void setAnimateRemovals(boolean enabled) {
+    animateRemovals = enabled;
+    if (!enabled) {
+      cancelRemovals();
+      discardPendingRemovals();
+    }
+  }
+
+  @Override
+  public void submitList(List<NativeCard> cards) {
+    submitList(cards, null);
+  }
+
+  @Override
+  public void submitList(List<NativeCard> cards, Runnable committed) {
+    long generation = ++listGeneration;
+    cancelPendingReveal();
+    cancelRemovals();
+    discardPendingRemovals();
+    if (animateRemovals && !instant && !NativeUi.reducedMotion() && row.isShown()) {
+      for (int i = 0; i < row.getChildCount() && pendingRemovals.size() < 4; i++) {
+        RecyclerView.ViewHolder raw = row.getChildViewHolder(row.getChildAt(i));
+        if (!(raw instanceof Holder)) continue;
+        Holder holder = (Holder) raw;
+        if (holder.card == null || holder.itemView.hasFocus()) continue;
+        boolean retained = false;
+        if (cards != null)
+          for (NativeCard card : cards)
+            if (card.id.equals(holder.card.id)) {
+              retained = true;
+              break;
+            }
+        if (retained) continue;
+        View view = holder.itemView;
+        if (view.getWidth() <= 0 || view.getHeight() <= 0) continue;
+        android.graphics.Bitmap snapshot;
+        try {
+          snapshot =
+              android.graphics.Bitmap.createBitmap(
+                  view.getWidth(), view.getHeight(), android.graphics.Bitmap.Config.ARGB_8888);
+        } catch (OutOfMemoryError unavailable) {
+          break; // Optional exit feedback must not compete with artwork for the bitmap budget.
+        }
+        view.draw(new android.graphics.Canvas(snapshot));
+        android.graphics.drawable.BitmapDrawable ghost =
+            new android.graphics.drawable.BitmapDrawable(row.getResources(), snapshot);
+        int left = Math.round(view.getLeft() + view.getTranslationX());
+        ghost.setBounds(left, view.getTop(), left + view.getWidth(), view.getBottom());
+        pendingRemovals.add(new Removal(snapshot, ghost));
+      }
+    }
+    super.submitList(
+        cards,
+        () -> {
+          if (generation != listGeneration) return;
+          if (!instant && animateRemovals && !NativeUi.reducedMotion() && row.isShown()) {
+            for (Removal removal : pendingRemovals) {
+              row.getOverlay().add(removal.drawable);
+              ValueAnimator fade = ValueAnimator.ofInt(255, 0);
+              fade.setDuration(140);
+              fade.addUpdateListener(
+                  a -> removal.drawable.setAlpha((Integer) a.getAnimatedValue()));
+              fade.addListener(
+                  new android.animation.AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationEnd(android.animation.Animator animation) {
+                      row.getOverlay().remove(removal.drawable);
+                      removals.remove(fade);
+                      removal.bitmap.recycle();
+                    }
+                  });
+              removals.add(fade);
+              fade.start();
+            }
+            pendingRemovals.clear();
+          } else discardPendingRemovals();
+          if (committed != null) committed.run();
+        });
+  }
+
+  private void cancelRemovals() {
+    for (ValueAnimator animator : new java.util.ArrayList<>(removals)) animator.cancel();
+  }
+
+  @Override
+  public void onDetachedFromRecyclerView(@NonNull RecyclerView recycler) {
+    cancelRemovals();
+    discardPendingRemovals();
+    cancelPendingReveal();
+  }
+
   private Consumer<String> focusedCard = id -> {};
 
   void setOnFocusedCard(Consumer<String> listener) {
@@ -232,7 +351,10 @@ final class NativeCardAdapter extends ListAdapter<NativeCard, NativeCardAdapter.
   @Override
   public void onBindViewHolder(@NonNull Holder holder, int position) {
     NativeCard card = getItem(position);
-    if (holder.card == null || !holder.card.id.equals(card.id)) {
+    if (holder.revealMotion != null) holder.revealMotion.cancel();
+    boolean sameItem = holder.card != null && holder.card.id.equals(card.id);
+    if (!sameItem) {
+      cancelContentMotion(holder);
       images.clear(holder.art);
       holder.art.setImageDrawable(null);
     }
@@ -258,8 +380,21 @@ final class NativeCardAdapter extends ListAdapter<NativeCard, NativeCardAdapter.
             + ". "
             + (card.item == null ? "" : holder.tag.getText() + ". ")
             + (card.subtitle == null ? "" : card.subtitle));
+    boolean animateProgress =
+        sameItem
+            && holder.progress.getVisibility() == View.VISIBLE
+            && card.progress >= 0
+            && canAnimate(holder);
+    if (holder.progressMotion != null) holder.progressMotion.cancel();
     holder.progress.setVisibility(card.progress < 0 ? View.GONE : View.VISIBLE);
-    holder.progress.setProgress(Math.max(0, card.progress));
+    if (animateProgress && holder.progress.getProgress() != card.progress) {
+      holder.progressMotion =
+          ValueAnimator.ofInt(holder.progress.getProgress(), Math.max(0, card.progress));
+      holder.progressMotion.setDuration(200);
+      holder.progressMotion.addUpdateListener(
+          a -> holder.progress.setProgress((Integer) a.getAnimatedValue()));
+      holder.progressMotion.start();
+    } else holder.progress.setProgress(Math.max(0, card.progress));
     if (card.app != null) images.showApp(holder.art, card.app, false);
     else if (card.kind == NativeCard.Kind.INPUT) {
       images.clear(holder.art);
@@ -384,21 +519,99 @@ final class NativeCardAdapter extends ListAdapter<NativeCard, NativeCardAdapter.
     NativeUi.move(holder.itemView, shift, 1, immediate || instant);
     NativeUi.move(holder.artwork, 0, focused ? focusScale() : 1, immediate || instant);
     holder.artwork.setElevation(focused ? ui.px(18) : 0);
+    holder.artwork.setForeground(focused && !classic() ? ui.focusOutline() : null);
+    applySelection(holder, immediate);
+  }
+
+  private void applySelection(Holder holder, boolean immediate) {
     boolean selected = holder.card != null && holder.card.id.equals(contextSelection);
     holder.itemView.setSelected(selected);
     holder.itemView.setStateDescription(selected ? "Recommendations shown below" : null);
+    int captionColor = selected ? 0xffe4d7bf : Color.WHITE;
+    if (holder.selectionMotion != null && (immediate || instant || NativeUi.reducedMotion())) {
+      holder.selectionMotion.cancel();
+      holder.selectionMotion = null;
+    }
+    if (holder.selected != selected || immediate || instant || NativeUi.reducedMotion()) {
+      if (holder.selectionMotion != null) holder.selectionMotion.cancel();
+      holder.selected = selected;
+      if (!immediate && canAnimate(holder)) {
+        int from = holder.title.getCurrentTextColor();
+        android.animation.ArgbEvaluator colors = new android.animation.ArgbEvaluator();
+        float markerAlpha = holder.marker.getAlpha();
+        holder.marker.setVisibility(View.VISIBLE);
+        holder.selectionMotion = ValueAnimator.ofFloat(0, 1);
+        holder.selectionMotion.setDuration(160);
+        holder.selectionMotion.addUpdateListener(
+            a -> {
+              float f = (Float) a.getAnimatedValue();
+              holder.title.setTextColor((Integer) colors.evaluate(f, from, captionColor));
+              holder.marker.setAlpha(markerAlpha + ((selected ? 1 : 0) - markerAlpha) * f);
+            });
+        holder.selectionMotion.start();
+      } else {
+        holder.title.setTextColor(captionColor);
+        holder.marker.setAlpha(selected ? 1 : 0);
+      }
+    }
+    holder.marker.setVisibility(View.VISIBLE);
+  }
+
+  private boolean canAnimate(Holder holder) {
+    return !instant
+        && !NativeUi.reducedMotion()
+        && holder.itemView.isAttachedToWindow()
+        && holder.itemView.isShown();
+  }
+
+  private void cancelContentMotion(Holder holder) {
+    if (holder.selectionMotion != null) holder.selectionMotion.cancel();
+    if (holder.progressMotion != null) holder.progressMotion.cancel();
+    if (holder.revealMotion != null) holder.revealMotion.cancel();
+    if (holder.card != null) {
+      holder.progress.setProgress(Math.max(0, holder.card.progress));
+      holder.itemView.setAlpha(holder.card.enabled ? 1 : .45f);
+    }
+    holder.selectionMotion = null;
+    holder.progressMotion = null;
+    holder.marker.setAlpha(0);
+  }
+
+  @Override
+  public void onViewDetachedFromWindow(@NonNull Holder holder) {
+    cancelContentMotion(holder);
+    holder.art.animate().cancel();
+    holder.art.setAlpha(1f);
+    boolean selected = holder.card != null && holder.card.id.equals(contextSelection);
+    holder.marker.setAlpha(selected ? 1f : 0f);
     holder.title.setTextColor(selected ? 0xffe4d7bf : Color.WHITE);
-    holder.artwork.setForeground(focused && !classic() ? ui.focusOutline() : null);
-    holder.marker.setVisibility(selected ? View.VISIBLE : View.GONE);
+  }
+
+  @Override
+  public void onViewAttachedToWindow(@NonNull Holder holder) {
+    if (holder.card != null && holder.card.app == null && holder.card.kind != NativeCard.Kind.INPUT)
+      images.load(
+          holder.art, holder.card.art, Math.round(width() * focusScale()), reservedArtHeight());
+    applySelection(holder, true);
   }
 
   void setInstant(boolean instant) {
     this.instant = instant;
+    if (instant) {
+      cancelRemovals();
+      discardPendingRemovals();
+      cancelPendingReveal();
+      for (int i = 0; i < row.getChildCount(); i++) {
+        RecyclerView.ViewHolder holder = row.getChildViewHolder(row.getChildAt(i));
+        if (holder instanceof Holder) cancelContentMotion((Holder) holder);
+      }
+    }
     updateMotion();
   }
 
   @Override
   public void onViewRecycled(@NonNull Holder holder) {
+    cancelContentMotion(holder);
     holder.itemView.animate().cancel();
     holder.artwork.animate().cancel();
     images.clear(holder.art);
@@ -416,6 +629,52 @@ final class NativeCardAdapter extends ListAdapter<NativeCard, NativeCardAdapter.
     for (int i = 0; i < current.size(); i++)
       if (current.get(i).id.equals(selectedId)) selectedPosition = i;
     updateMotion();
+    if (instant || NativeUi.reducedMotion()) return;
+    long generation = listGeneration;
+    // Adapter updates precede holder layout; resolve identities once the accepted diff is drawn.
+    cancelPendingReveal();
+    pendingReveal =
+        new android.view.ViewTreeObserver.OnPreDrawListener() {
+          @Override
+          public boolean onPreDraw() {
+            cancelPendingReveal();
+            if (generation != listGeneration || instant || NativeUi.reducedMotion()) return true;
+            revealChangedCards(previous, current);
+            return true;
+          }
+        };
+    row.getViewTreeObserver().addOnPreDrawListener(pendingReveal);
+    row.invalidate();
+  }
+
+  private void revealChangedCards(List<NativeCard> previous, List<NativeCard> current) {
+    for (int i = 0; i < row.getChildCount(); i++) {
+      RecyclerView.ViewHolder viewHolder = row.getChildViewHolder(row.getChildAt(i));
+      if (!(viewHolder instanceof Holder)) continue;
+      Holder holder = (Holder) viewHolder;
+      int position = holder.getBindingAdapterPosition();
+      if (holder.card == null
+          || position < 0
+          || position >= current.size()
+          || !holder.card.id.equals(current.get(position).id)
+          || !canAnimate(holder)
+          || holder.itemView.hasFocus()) continue;
+      int oldPosition = -1;
+      for (int j = 0; j < previous.size(); j++)
+        if (previous.get(j).id.equals(holder.card.id)) {
+          oldPosition = j;
+          break;
+        }
+      if (oldPosition == holder.getBindingAdapterPosition()) continue;
+      // Reveal only a live diff's visible inserted/moved cards, never normal scroll binds.
+      if (holder.revealMotion != null) holder.revealMotion.cancel();
+      float alpha = holder.card.enabled ? 1 : .45f;
+      holder.revealMotion = ValueAnimator.ofFloat(alpha * .65f, alpha);
+      holder.revealMotion.setDuration(160);
+      holder.revealMotion.addUpdateListener(
+          a -> holder.itemView.setAlpha((Float) a.getAnimatedValue()));
+      holder.revealMotion.start();
+    }
   }
 
   static final class Holder extends RecyclerView.ViewHolder {
@@ -425,6 +684,8 @@ final class NativeCardAdapter extends ListAdapter<NativeCard, NativeCardAdapter.
     final ProgressBar progress;
     final View marker;
     NativeCard card;
+    boolean selected;
+    ValueAnimator selectionMotion, progressMotion, revealMotion;
 
     Holder(
         View view,
